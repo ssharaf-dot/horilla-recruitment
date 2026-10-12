@@ -1,3 +1,7 @@
+## Recruitment workspace community fork
+
+This fork adds a configurable hiring workspace and public careers site. See [setup, compatibility and permissions](recruitment_workspace/README.md). The original Horilla documentation follows.
+
 # **Horilla 🦍** [![LGPL License](https://img.shields.io/badge/license-LGPL-green.svg)](https://www.gnu.org/licenses/lgpl-3.0)  [![Docker](https://img.shields.io/badge/Docker-Horilla-blue?logo=docker)](https://hub.docker.com/r/horilla/horilla)
 
 **Horilla** is a Free and Open Source HRMS (Human Resource Management System) Software designed to streamline HR processes and enhance organizational efficiency.

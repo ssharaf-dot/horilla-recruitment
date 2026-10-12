@@ -152,3 +152,19 @@ whoosh_index/
 
 #PyCharm
 .idea/
+
+# Deployment credentials and data backups
+.env.*
+!.env.staging.example
+!.env.internal.example
+restic.env
+restic-password
+offsite-backup.json
+*.dump
+*.backup
+backups/
+deploy/production-*.png
+
+# The portal schema is part of the distributable source.
+!recruitment_portal/migrations/*.py
+!deploy/.env.recruitment.example

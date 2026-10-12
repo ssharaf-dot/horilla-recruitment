@@ -3,3 +3,17 @@
 *.md
 LICENSE
 docker-compose.yaml
+# Keep private and local files out of build contexts
+.git
+.venv
+.env
+.env.*
+**/.env
+**/.env.*
+media
+staticfiles
+backups
+*.dump
+*.backup
+__pycache__
+**/__pycache__
