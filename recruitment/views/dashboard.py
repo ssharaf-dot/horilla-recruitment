@@ -37,6 +37,10 @@ def dashboard(request):
     """
     This method is used to render dashboard for recruitment module
     """
+    from django.conf import settings
+    if getattr(settings, "RECRUITMENT_ONLY", False):
+        from recruitment_portal.views import overview
+        return overview(request)
     candidates = Candidate.objects.all()
     stage_chart_count = 0
     vacancy_chart = Recruitment.objects.filter(closed=False, is_event_based=False)

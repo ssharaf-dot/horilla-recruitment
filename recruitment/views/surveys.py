@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 from uuid import uuid4
 
+from django.conf import settings
 from django.contrib import messages
 from django.core import serializers
 from django.core.files.storage import default_storage
@@ -338,6 +339,16 @@ def application_form(request):
     """
     This method renders candidate form to create candidate
     """
+    if settings.RECRUITMENT_ONLY:
+        from recruitment_portal.views import apply
+        from django.http import Http404
+        try:
+            pk = int(request.GET.get("recruitmentId", ""))
+        except (ValueError, TypeError):
+            return redirect("portal-careers")
+        if request.method in {"GET", "HEAD"}:
+            return redirect("portal-apply", pk=pk)
+        return apply(request, pk=pk)
     recruitment = None
     recruitment_id = request.GET.get("recruitmentId")
     resume_id = request.GET.get("resumeId")
