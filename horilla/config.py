@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 def get_apps_in_base_dir():
+    if getattr(settings, "RECRUITMENT_ONLY", False):
+        return ["recruitment"]
     return SIDEBARS
 
 

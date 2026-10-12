@@ -40,6 +40,7 @@ SECRET_KEY = env("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
+RECRUITMENT_ONLY = env.bool("HORILLA_RECRUITMENT_ONLY", default=False)
 
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 
@@ -60,6 +61,7 @@ INSTALLED_APPS = [
     "base",
     "employee",
     "recruitment",
+    "recruitment_portal",
     "leave",
     "pms",
     "onboarding",
@@ -85,6 +87,7 @@ MIDDLEWARE = [
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "recruitment_workspace.recruitment_mode.RecruitmentOnlyMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -104,6 +107,8 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "recruitment_workspace.recruitment_mode.context",
+                "recruitment_portal.context_processors.portal",
             ],
         },
     },

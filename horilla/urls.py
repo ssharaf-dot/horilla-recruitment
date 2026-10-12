@@ -29,6 +29,7 @@ def health_check(request):
 
 
 urlpatterns = [
+    path("", include("recruitment_portal.urls")),
     path("admin/", admin.site.urls),
     path("accounts/", include("django.contrib.auth.urls")),
     path("accounts/", include("django.contrib.auth.urls")),
