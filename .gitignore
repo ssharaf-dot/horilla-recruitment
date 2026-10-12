@@ -168,3 +168,4 @@ deploy/production-*.png
 # The portal schema is part of the distributable source.
 !recruitment_portal/migrations/*.py
 !deploy/.env.recruitment.example
+.runtime-cache/
