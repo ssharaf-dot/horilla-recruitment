@@ -1,7 +1,7 @@
 {% load i18n %}
 <section class="oh-main__topbar" x-data="{searchShow: false}">
     <div class="oh-main__titlebar oh-main__titlebar--left">
-        <div class="oh-main__titlebar-title fw-bold mb-0 text-dark" style="cursor:pointer;">{% trans "Recruitment" %}</div>
+        <div class="oh-main__titlebar-title fw-bold mb-0 text-dark" style="cursor:pointer;">{% if recruitment_only %}Jobs{% else %}{% trans "Recruitment" %}{% endif %}</div>
 
         <a class="oh-main__titlebar-search-toggle " role="button" aria-label="Toggle Search" @click="searchShow = !searchShow">
             <ion-icon name="search-outline" class="oh-main__titlebar-serach-icon"></ion-icon>
@@ -32,7 +32,7 @@
                     <a href='#' data-toggle="oh-modal-toggle" data-target="#objectCreateModal"
                         hx-target="#objectCreateModalTarget" hx-get="{% url "recruitment-create" %}"
                         class="oh-btn oh-btn--secondary ml-2">
-                        <ion-icon name="add" class="mr-1"></ion-icon>{% trans "Create" %}
+                        <ion-icon name="add" class="mr-1"></ion-icon>{% if recruitment_only %}Create job{% else %}{% trans "Create" %}{% endif %}
                     </a>
                     {% endif %}
                 </div>
