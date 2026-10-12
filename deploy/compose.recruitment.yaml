@@ -1,0 +1,39 @@
+name: horilla-recruitment
+services:
+  horilla:
+    image: horilla/recruitment-workspace:local
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file: .env.recruitment
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?Set a fresh SECRET_KEY}
+      HORILLA_RECRUITMENT_ONLY: ${HORILLA_RECRUITMENT_ONLY:-false}
+      DEBUG: "false"
+      DATABASE_URL: postgres://${DB_USER:?required}:${DB_PASSWORD:?required}@db:5432/${DB_NAME:?required}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - recruitment_media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+  db:
+    image: postgres:16-bullseye
+    environment:
+      POSTGRES_DB: ${DB_NAME:?required}
+      POSTGRES_USER: ${DB_USER:?required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?required}
+    volumes:
+      - recruitment_db:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+volumes:
+  recruitment_db:
+  recruitment_media:
