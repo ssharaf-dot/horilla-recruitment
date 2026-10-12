@@ -16,6 +16,8 @@ from django.template import TemplateSyntaxError
 from django.template.defaultfilters import register
 from django.utils.translation import gettext as _
 
+from recruitment_workspace.recruitment_mode import module_visible
+
 from base.models import Company, EmployeeShiftSchedule
 from employee.methods.duration_methods import strtime_seconds
 from horilla.horilla_middlewares import _thread_locals
@@ -247,9 +249,9 @@ def get_item(list, i):
 @register.filter(name="app_installed")
 def app_installed(app_name):
     """
-    Returns True if the app with the given name is installed, otherwise False.
+    Return whether an installed module is visible in the current interface.
     """
-    return apps.is_installed(app_name)
+    return apps.is_installed(app_name) and module_visible(app_name)
 
 
 @register.filter(name="is_stagemanager")
