@@ -317,7 +317,7 @@
 									data-target="#personal_target">{% trans "About" %}</a>
 							</li>
 
-							{% if request.user == employee.employee_user_id or request.user|check_manager:employee or perms.attendance.view_worktyperequest or perms.attendance.view_shiftrequest %}
+							{% if not recruitment_only %}{% if request.user == employee.employee_user_id or request.user|check_manager:employee or perms.attendance.view_worktyperequest or perms.attendance.view_shiftrequest %}
 								<li data-cell-index="10" data-cell-title="{% trans 'Work Type & Shift' %}"
 									class="oh-general__tab">
 									<a hx-get={% url 'shift-tab' employee.id %} hx-target="#shift_target"
@@ -326,7 +326,7 @@
 										{% trans "Work Type & Shift"%}
 									</a>
 								</li>
-							{% endif %}
+							{% endif %}{% endif %}
 
 							{% if "attendance"|app_installed %}
 								{% if perms.attendance.view_attendance or request.user|check_manager:employee %}
@@ -425,7 +425,7 @@
 								</li>
 							{% endif %}
 
-							{% if perms.horilla_documents.view_document or request.user == employee.employee_user_id %}
+							{% if not recruitment_only %}{% if perms.horilla_documents.view_document or request.user == employee.employee_user_id %}
 								<li data-cell-index="20" data-cell-title="{% trans 'Documents' %}" class="oh-general__tab">
 									<a hx-get="{% url 'document-tab' employee.id %}?employee_view=true"
 										hx-target="#document_target" data-action="general-tab"
@@ -433,7 +433,7 @@
 										{% trans "Documents" %}
 									</a>
 								</li>
-							{% endif %}
+							{% endif %}{% endif %}
 
 							{% if perms.employee.view_employee %}
 							<li class="oh-general__tab" data-cell-index="22" data-cell-title="{% trans 'Mail Log' %}">
@@ -453,17 +453,17 @@
 								{% endif %}
 							{% endif %}
 						</ul>
-						<button
+{% if not recruitment_only %}						<button
 							hx-get={% url 'bonus-points-tab' employee.id %} hx-target="#bonus_points_target" id="bonus-tab-button" hidden>
-						</button>
+						</button>{% endif %}
 
 						<div class="oh-general__tab-target oh-profile__info-tab mb-4" id="personal_target"> </div>
 
 						<div class="oh-general__tab-target oh-profile__info-tab mb-4 d-none" id="shift_target"></div>
 
-						<div class="oh-general__tab-target oh-profile__info-tab mb-4 d-none" id="bonus_points_target">
+						{% if not recruitment_only %}<div class="oh-general__tab-target oh-profile__info-tab mb-4 d-none" id="bonus_points_target">
 							{% include "tabs/bonus_points.html" %}
-						</div>
+						</div>{% endif %}
 
 						<div class="oh-general__tab-target oh-profile__info-tab mb-4 d-none" id="note_target">
 							{% include "tabs/note_tab.html" %}
