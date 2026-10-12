@@ -1,3 +1,4 @@
+{% if recruitment_only %}{% include 'portal/received.html' %}{% else %}
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
@@ -124,3 +125,5 @@
     <script></script>
   </body>
 </html>
+
+{% endif %}
