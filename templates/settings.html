@@ -52,6 +52,9 @@
 									<div class="oh-accordion-body">
 										<div class="row">
 										<div class="col-sm-12 col-md-12 col-lg-12">
+{% if recruitment_only and perms.employee.view_employee %}
+<div class="oh-input-group"><a href="{% url 'employee-view' %}" class="oh-inner-sidebar__link oh-dropdown__link">{% trans "Staff Users" %}</a></div>
+{% endif %}
 											<div class="oh-input-group">
 												<a
 													id="generalSettings"
@@ -133,7 +136,7 @@
 										{% endif %}
 										{% endif %}
 											<div class="oh-input-group">
-												{% if perms.horilla_backup.view_googledrivebackup %}
+												{% if not recruitment_only and perms.horilla_backup.view_googledrivebackup %}
 													<a
 														id="date"
 														href="{% url 'gdrive' %}"
@@ -275,6 +278,7 @@
 						<hr>
 						{% endif %}
 
+{% if not recruitment_only %}
 						<li class="oh-inner-sidebar__item">
 							<div class="oh-accordion ms-2">
 								<div class="oh-accordion-header" style="font-size:16px;">
@@ -371,6 +375,7 @@
 							</div>
 						</li>
 						<hr>
+{% endif %}
 						{% if "attendance"|app_installed %}
 						<li class="oh-inner-sidebar__item">
 							<div class="oh-accordion ms-2">

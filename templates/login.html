@@ -6,7 +6,7 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Login - {{white_label_company_name}} Dashboard</title>
+    <title>{% if recruitment_only %}Team sign-in · {{ portal_brand.portal_name }}{% else %}Login - {{white_label_company_name}} Dashboard{% endif %}</title>
     <link rel="apple-touch-icon" sizes="180x180"
         href="{% if white_label_company.icon %}{{white_label_company.icon.url}} {% else %}{% static 'favicons/apple-touch-icon.png' %}{% endif %}">
     <link rel="icon" type="image/png" sizes="32x32"
@@ -15,9 +15,10 @@
         href="{% if white_label_company.icon %}{{white_label_company.icon.url}} {% else %}{% static 'favicons/favicon-16x16.png' %}{% endif %}">
     <link rel="stylesheet" href="{% static '/build/css/style.min.css' %}" />
     <link rel="manifest" href="{% static 'build/manifest.json' %}" />
+{% if recruitment_only %}<link rel="stylesheet" href="{% static 'portal/portal.css' %}"><style>:root{--rp-accent:{{ portal_brand.accent_color }}}</style>{% endif %}
 </head>
 
-<body>
+<body{% if recruitment_only %} class="rp-public rp-login"{% endif %}>
     <div id="main">
         <div class="oh-alert-container">
             {% for message in messages %}
@@ -27,25 +28,25 @@
             {% endfor %}
         </div>
         <main class="oh-auth">
-            <div class="oh-auth-card mb-4">
+            <div class="oh-auth-card mb-4">{% if recruitment_only %}<div class="rp-login-brand">{% include "portal/brand.html" %}<h2>Welcome to your hiring workspace.</h2><p>Sign in to manage jobs, candidates and interviews.</p></div>{% endif %}
                 <h1 class="oh-onboarding-card__title oh-onboarding-card__title--h2 text-center my-3">
                     {% trans "Sign In" %}
                 </h1>
                 <p class="text-muted text-center">
-                    {% trans "Please login to access the dashboard." %}
+                    {% if not recruitment_only %}{% trans "Please login to access the dashboard." %}{% endif %}
                 </p>
                 <form method="post" class="oh-form-group">
                     {% csrf_token %}
                     <div class="oh-input-group">
                         <label class="oh-label" for="username">{% trans "Username" %}</label>
                         <input type="text" id="username" name="username" class="oh-input w-100"
-                            placeholder="e.g. adam.luis@horilla.com" />
+                            placeholder="Your username" autocomplete="username" />
                     </div>
                     <div class="oh-input-group">
                         <label class="oh-label" for="password">{% trans "Password" %}</label>
                         <div class="oh-password-input-container">
                             <input type="password" id="password" name="password"
-                                class="oh-input oh-input--password w-100" placeholder="Use alphanumeric characters" />
+                                class="oh-input oh-input--password w-100" placeholder="Your password" autocomplete="current-password" />
                             <button type="button" class="oh-btn oh-btn--transparent oh-password-input--toggle">
                                 <ion-icon class="oh-passowrd-input__show-icon" title="{% trans 'Show Password' %}"
                                     name="eye-outline"></ion-icon>
@@ -67,7 +68,7 @@
                             </a>
                         </small>
                     {% endif %}
-                </form>
+                </form>{% if recruitment_only %}<a class="rp-login-careers" href="{% url 'portal-careers' %}">Looking for a job? Explore our careers site →</a>{% endif %}
                 {% if initialize_database %}
                     <div>
                         <div class="d-flex gap-2">
@@ -96,7 +97,7 @@
                     </div>
                 {% endif %}
             </div>
-            <div style="display: contents;">
+            {% if not recruitment_only %}<div style="display: contents;">
                 <img src={% if white_label_company.icon %}
                         "{{white_label_company.icon.url}}"
                         alt="{{white_label_company_name}}"
@@ -110,6 +111,7 @@
                 {% endif %}
 
             </div>
+            {% endif %}
         </main>
     </div>
     <script src="{% static '/build/js/web.frontend.min.js' %}"></script>

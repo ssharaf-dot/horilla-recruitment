@@ -15,7 +15,7 @@
         var at_work_seconds = {{ request.user.employee_get.get_forecasted_at_work.forecasted_at_work_seconds }}
         var run = 0
     </script>
-    <title class="time-runner stop-runner">{{white_label_company_name}}</title>
+    <title{% if not recruitment_only %} class="time-runner stop-runner"{% endif %}>{% if recruitment_only %}{{ portal_brand.portal_name }} · {{ portal_brand.organization_name }}{% else %}{{white_label_company_name}}{% endif %}</title>
     <link rel="stylesheet" href="{% static 'build/css/driver.min.css' %}" />
     <meta name="theme-color" content="orangered">
     <link rel="manifest" href="{% static 'build/manifest.json' %}">
@@ -49,12 +49,13 @@
     <!-- Bootstrap JS -->
     {% block styles %}
     {% endblock styles %}
+{% if recruitment_only %}<link rel="stylesheet" href="{% static 'portal/portal.css' %}"><style>:root{--rp-accent:{{ portal_brand.accent_color }}}</style>{% endif %}
 </head>
 
 
 <div hidden id="statiUrl" data-url='{% static "" %}'></div>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<body{% if recruitment_only %} class="rp-workspace"{% endif %} hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
     <span class="logged-in" data-user-id="{{request.user.id}}"></span>
     <div id="reloadMessages">
         {% include "generic/messages.html" %}
@@ -127,12 +128,14 @@
             <nav class="oh-navbar" style="width: -webkit-fill-available;;">
                 <div class="oh-wrapper oh-navbar__wrapper">
                     <div class="oh-navbar__toggle-container">
+                        {% if recruitment_only %}<button class="oh-navbar__toggle-link rp-nav-toggle" type="button" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false"><img src="{% static 'images/ui/menu.svg' %}" width="20" height="20" alt=""></button><span class="rp-topbar-label">{{ portal_brand.portal_name }} / Hiring workspace</span>{% else %}
                         <a href="#" class="oh-navbar__toggle-link oh-link__unstyled" onclick="handleSidebarToggle()">
                             <img src="{% static 'images/ui/menu.svg' %}" width="24" height="24"
                                 class="oh-navbar__toggle-menu" loading="lazy" />
                         </a>
 
-                        {% if breadcrumbs %}
+                        {% endif %}
+                        {% if breadcrumbs and not recruitment_only %}
                             <!-- Start of breadcrumb in nav bar -->
                             {% include "base/navbar_components/breadcrumbs_view.html" %}
                             <!-- End of breadcrumb in nav bar -->
@@ -262,7 +265,7 @@
             window.history.replaceState({}, document.title, urlWithoutQuery);
         }
     </script>
-    {% if enabled_timerunner %}
+    {% if enabled_timerunner and not recruitment_only %}
         <script>
             // time-runner
             function secondsToDuration(seconds) {
@@ -321,6 +324,7 @@
             }
         </script>
     {% endif %}
+{% if recruitment_only %}<script src="{% static 'portal/workspace.js' %}"></script>{% endif %}
 </body>
 
 </html>

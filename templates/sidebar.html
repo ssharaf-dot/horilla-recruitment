@@ -53,6 +53,7 @@ function initializeSummernote(candId,searchWords,) {
 </script>
 {% endverbatim %}
 
+{% if recruitment_only %}{% include 'portal/sidebar.html' %}{% else %}
 <style>
   .oh-sidebar__submenu-items_re li::before {
     content: "★";
@@ -273,7 +274,7 @@ function initializeSummernote(candId,searchWords,) {
               >
             </li>
             {% endif %}
-            {% if perms.base.add_holidays %}
+            {% if not recruitment_only and perms.base.add_holidays %}
             <li class="oh-sidebar__submenu-item">
               <a
                 href="{% url 'holiday-view' %}"
@@ -282,7 +283,7 @@ function initializeSummernote(candId,searchWords,) {
               >
             </li>
             {% endif %}
-            {% if perms.base.view_companyleaves %}
+            {% if not recruitment_only and perms.base.view_companyleaves %}
             <li class="oh-sidebar__submenu-item">
               <a
               href="{% url 'company-leave-view' %}"
@@ -307,6 +308,7 @@ function initializeSummernote(candId,searchWords,) {
     </ul>
   </div>
 </div>
+{% endif %}
 <style>
   .highlight-selected{
     background-color: rgba(255, 68, 0, 0.134);
