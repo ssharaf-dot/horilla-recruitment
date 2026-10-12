@@ -42,6 +42,19 @@ SECRET_KEY = env("SECRET_KEY")
 DEBUG = env("DEBUG")
 RECRUITMENT_ONLY = env.bool("HORILLA_RECRUITMENT_ONLY", default=False)
 
+# Pipeline components share cached querysets across Gunicorn workers. Django's
+# default local-memory cache is per process and causes missing stage panels.
+# Keep the shared cache private, outside both media and static directories.
+if RECRUITMENT_ONLY:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+            "LOCATION": str(BASE_DIR / ".runtime-cache"),
+            "TIMEOUT": 86400,
+            "OPTIONS": {"MAX_ENTRIES": 1000},
+        }
+    }
+
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 
 # Application definition
