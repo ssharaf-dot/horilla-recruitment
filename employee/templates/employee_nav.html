@@ -34,7 +34,7 @@
 <div id="employeeExport" class="oh-modal" role="dialog" aria-labelledby="employeeExport" aria-hidden="true">
     <div id="employeeExportTarget" class="oh-modal__dialog" style="max-width: 750px"></div>
 </div>
-{% if perms.employee.change_employee %}
+{% if perms.employee.change_employee and not recruitment_only %}
     <div class="oh-modal" id="bulkUpdateModal" role="dialog" aria-labelledby="bulkUpdateModal" aria-hidden="true">
         <div class="oh-modal__dialog" style="max-width: 750px">
             <div class="oh-modal__dialog-header">
@@ -66,7 +66,7 @@
 <section class="oh-wrapper oh-main__topbar pb-3" x-data="{searchShow: false}">
     <div class="oh-main__titlebar oh-main__titlebar--left">
         <a href="{% url 'employee-view' %}" class="oh-main__titlebar-title fw-bold mb-0 text-dark"
-            hx-target="#view-container" style="cursor: pointer">{% trans "Employees" %}</a>
+            hx-target="#view-container" style="cursor: pointer">{% if recruitment_only %}{% trans "Staff Users" %}{% else %}{% trans "Employees" %}{% endif %}</a>
         <a class="oh-main__titlebar-search-toggle" role="button" aria-label="Toggle Search"
             @click="searchShow = !searchShow">
             <ion-icon name="search-outline" class="oh-main__titlebar-serach-icon"></ion-icon>
@@ -229,24 +229,24 @@
                             <div class="oh-dropdown__menu oh-dropdown__menu--right" x-show="open" style="display: none">
                                 <ul class="oh-dropdown__items">
                                     {% if perms.employee.add_employee %}
-                                        <li class="oh-dropdown__item">
+                                        {% if not recruitment_only %}<li class="oh-dropdown__item">
                                             <a href="#" class="oh-dropdown__link"
                                                 data-toggle="oh-modal-toggle" data-target="#objectCreateModal"
                                                 hx-get="{% url 'work-info-import' %}" hx-target="#objectCreateModalTarget"
                                                 hx-on-htmx-after-request="setTimeout(() => {template_download(event);},100);">
                                                 {% trans "Import" %}
                                             </a>
-                                        </li>
+                                        </li>{% endif %}
                                     {% endif %}
                                     {% if emp %}
                                         {% if perms.employee.add_employee %}
-                                            <li class="oh-dropdown__item">
+                                            {% if not recruitment_only %}<li class="oh-dropdown__item">
                                                 <a href="#" class="oh-dropdown__link" id="employee-info-export"
                                                     data-toggle="oh-modal-toggle" data-target="#employeeExport"
                                                     hx-get="{% url 'work-info-export' %}" hx-target="#employeeExportTarget">
                                                     {% trans "Export" %}
                                                 </a>
-                                            </li>
+                                            </li>{% endif %}
                                         {% endif %}
                                         {% if perms.employee.change_employee %}
                                             <li class="oh-dropdown__item">
@@ -266,11 +266,11 @@
                                                     {% trans "Bulk Mail" %}
                                                 </a>
                                             </li>
-                                            <li class="oh-dropdown__item">
+                                            {% if not recruitment_only %}<li class="oh-dropdown__item">
                                                 <a href="#" class="oh-dropdown__link" id="employeeBulkUpdateId">
                                                     {% trans "Bulk Update" %}
                                                 </a>
-                                            </li>
+                                            </li>{% endif %}
                                         {% endif %}
                                         {% if perms.employee.delete_employee %}
                                             <li class="oh-dropdown__item">
