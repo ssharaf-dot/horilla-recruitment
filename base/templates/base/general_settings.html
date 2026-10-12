@@ -1,6 +1,6 @@
 {% extends 'settings.html' %} {% block settings %}{% load i18n %} {% load horillafilters %}
 
-{% if perms.base.change_announcementexpire %}
+{% if not recruitment_only and perms.base.change_announcementexpire %}
 {% include "announcement/expiry_day.html" %}
 {% endif %}
 
@@ -25,7 +25,7 @@
     {% include "payroll/settings/settings.html" %}
 {% endif %}
 
-{% if perms.employee.change_employeegeneralsetting %}
+{% if not recruitment_only and perms.employee.change_employeegeneralsetting %}
     {% include "settings/settings.html" %}
 {% endif %}
 
@@ -36,7 +36,7 @@
     {% endif %}
 {% endif %}
 
-{% if perms.base.view_historytrackingfields %}
+{% if not recruitment_only and perms.base.view_historytrackingfields %}
     {% include "base/audit_tag/history_tracking_fields.html" %}
 {% endif %}
 
