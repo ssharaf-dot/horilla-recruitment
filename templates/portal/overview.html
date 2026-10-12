@@ -1,0 +1,21 @@
+{% extends 'index.html' %}{% load i18n %}
+{% block content %}
+<main class="rp-content" id="workspace-content">
+  <header class="rp-page-heading"><div><p class="rp-eyebrow">YOUR HIRING WORKSPACE</p><h1>Good talent. Great possibilities.</h1><p>Every opportunity, every conversation, all in one place.</p></div><a class="rp-button rp-button-light" href="{% url 'portal-careers' %}" target="_blank" rel="noopener">Preview careers site ↗</a></header>
+  <section class="rp-metrics" aria-label="Hiring overview">
+    <a href="{% url 'recruitment-view' %}" class="rp-metric"><span>Open jobs</span><strong>{{ jobs_count }}</strong><small>Your active hiring opportunities</small></a>
+    <div class="rp-metric"><span>Active candidates</span><strong>{{ candidate_count }}</strong><small>People in your recruitment process</small></div>
+    <div class="rp-metric"><span>Upcoming interviews</span><strong>{{ interview_count }}</strong><small>Scheduled conversations ahead</small></div>
+    <div class="rp-metric"><span>Hired</span><strong>{{ hired_count }}</strong><small>Successful hires across your jobs</small></div>
+  </section>
+  <div class="rp-dashboard-grid">
+    <section class="rp-panel"><header class="rp-panel-heading"><div><h2>Jobs in progress</h2><p>A clear view of what you’re hiring for.</p></div><a href="{% url 'recruitment-view' %}">View all jobs →</a></header>
+      {% for job in open_jobs %}<a class="rp-job-row" href="{% url 'pipeline' %}?title={{ job.title|urlencode }}&closed=false"><span class="rp-job-initial" aria-hidden="true">{{ job.title|default:'Job'|slice:':1' }}</span><span class="rp-row-main"><strong>{{ job.title|default:job }}</strong><small>{{ job.company_id.city|default:'Location not set' }} · {{ job.vacancy|default:0 }} opening{{ job.vacancy|pluralize }}</small></span><span class="rp-pill {% if job.is_published %}rp-pill-green{% endif %}">{% if job.is_published %}Published{% else %}Draft{% endif %}</span><span class="rp-applicant-count">{{ job.applicant_count }} applicant{{ job.applicant_count|pluralize }}</span><span aria-hidden="true">↗</span></a>
+      {% empty %}<div class="rp-empty"><span class="rp-empty-icon" aria-hidden="true">▣</span><h3>Your next hire starts here.</h3><p>Create a job, add your hiring stages, and publish it to your careers site.</p>{% if can_create_job %}<a class="rp-button" href="{% url 'recruitment-view' %}">Create your first job →</a>{% endif %}</div>{% endfor %}
+    </section>
+    <aside class="rp-panel rp-careers-card"><p class="rp-eyebrow">YOUR CANDIDATE EXPERIENCE</p><h2>Make a great first impression.</h2><p>Your careers site is where future colleagues discover your opportunities.</p><div class="rp-mini-site"><span class="rp-mini-dots">● ● ●</span><strong>{{ portal_brand.organization_name }}</strong><span>{{ portal_brand.careers_headline }}</span></div><a class="rp-button rp-button-light" href="{% url 'portal-careers' %}" target="_blank" rel="noopener">Open careers site ↗</a>{% if can_manage_brand %}<a class="rp-text-link" href="{% url 'portal-branding' %}">Edit portal branding →</a>{% endif %}</aside>
+    <section class="rp-panel"><header class="rp-panel-heading"><div><h2>Your hiring pipeline</h2><p>From first application to a new colleague.</p></div><a href="{% url 'pipeline' %}?closed=false">Open pipeline →</a></header><div class="rp-pipeline-summary">{% for stage in pipeline_summary %}<div><span>{{ stage.name }}</span><strong>{{ stage.count }}</strong><span class="rp-pipeline-line"></span></div>{% endfor %}</div></section>
+    <section class="rp-panel"><header class="rp-panel-heading"><div><h2>Coming up</h2><p>Keep the next conversation in sight.</p></div></header>{% for interview in upcoming_interviews %}<div class="rp-interview-row"><div class="rp-date-tile"><span>{{ interview.interview_date|date:'M' }}</span><strong>{{ interview.interview_date|date:'d' }}</strong></div><div><strong>{{ interview.candidate_id.name }}</strong><p>{{ interview.interview_time|time:'H:i' }} · {{ interview.candidate_id.recruitment_id }}</p></div></div>{% empty %}<div class="rp-empty rp-empty-small"><h3>No interviews scheduled.</h3><p>Scheduled interviews will appear here so your team can plan ahead.</p></div>{% endfor %}</section>
+  </div>
+</main>
+{% endblock %}

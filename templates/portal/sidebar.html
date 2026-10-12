@@ -1,0 +1,14 @@
+{% load static %}
+<aside class="oh-sidebar rp-sidebar" aria-label="Recruitment navigation">
+  <a class="rp-brand" href="{% url 'recruitment-dashboard' %}">{% include 'portal/brand.html' %}</a>
+  <div class="rp-workspace-label"><span class="rp-status-dot"></span> Hiring workspace</div>
+  <nav class="rp-navigation">
+    {% regroup portal_navigation by group as groups %}
+    {% for group in groups %}<span class="rp-nav-caption">{{ group.grouper }}</span>{% for item in group.list %}
+    <a href="{{ item.url }}" class="rp-nav-link{% if item.active %} is-active{% endif %}" {% if item.active %}aria-current="page"{% endif %}><span class="rp-nav-icon" aria-hidden="true">{% if item.icon == 'briefcase' %}▣{% elif item.icon == 'columns' %}▥{% elif item.icon == 'users' %}◎{% elif item.icon == 'calendar' %}▦{% elif item.icon == 'grid' %}◫{% elif item.icon == 'spark' %}✧{% else %}≡{% endif %}</span>{{ item.label }}</a>
+    {% endfor %}{% endfor %}
+    {% if can_manage_brand %}<span class="rp-nav-caption">Manage</span><a class="rp-nav-link{% if request.resolver_match.url_name == 'portal-branding' %} is-active{% endif %}" href="{% url 'portal-branding' %}"><span class="rp-nav-icon" aria-hidden="true">⚙</span>Portal settings</a>{% endif %}
+    {% if request.user.is_superuser or perms.base.view_company %}<a class="rp-nav-link" href="{% url 'general-settings' %}"><span class="rp-nav-icon" aria-hidden="true">≡</span>Configuration</a>{% endif %}
+  </nav>
+  <div class="rp-sidebar-bottom"><a class="rp-careers-link" href="{% url 'portal-careers' %}" target="_blank" rel="noopener">Visit careers site <span aria-hidden="true">↗</span></a><p>Powered by Horilla</p></div>
+</aside>
