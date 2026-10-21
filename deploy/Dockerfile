@@ -10,6 +10,7 @@ RUN python3 /tmp/verify_fakhruddin_baseline.py && rm /tmp/verify_fakhruddin_base
 COPY deploy/runtime_migrations/auth/0013_user_is_new_employee.py /usr/local/lib/python3.10/site-packages/django/contrib/auth/migrations/0013_user_is_new_employee.py
 
 COPY recruitment_workspace/ /app/recruitment_workspace/
+COPY recruitment_experience/ /app/recruitment_experience/
 COPY recruitment_portal/ /app/recruitment_portal/
 COPY horilla/horilla_middlewares.py /app/horilla/horilla_middlewares.py
 COPY horilla/urls.py /app/horilla/urls.py
