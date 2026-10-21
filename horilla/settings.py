@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     "employee",
     "recruitment",
     "recruitment_portal",
+    "recruitment_experience",
     "leave",
     "pms",
     "onboarding",
