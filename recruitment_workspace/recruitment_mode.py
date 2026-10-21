@@ -23,6 +23,8 @@ HIDDEN_MODULES = frozenset({
 BASE_ROUTES = frozenset({
     "portal-careers", "portal-job-detail", "portal-apply", "portal-application-received",
     "portal-logo", "portal-branding",
+    "applicant-home", "applicant-login", "applicant-register", "applicant-logout",
+    "applicant-detail", "applicant-cv", "applicant-questionnaire", "workspace-applicant-preview",
     "home-page", "404", "login", "forgot-password", "employee-reset-password",
     "reset-send-success", "change-password", "change-username", "two-factor",
     "send-otp", "logout", "settings", "general-settings", "user-group-create",
@@ -109,11 +111,12 @@ def context(request):
 def dashboard_accessible(user):
     # Match the existing dashboard's permission-or-manager rule. Its denial
     # script sends users back to '/', so reject here to avoid a landing loop.
-    if user.has_perm("recruitment.view_recruitment"):
+    if user.has_perm("recruitment.view_recruitment") or user.has_perm("recruitment_experience.view_hiringoverview"):
         return True
     employee = getattr(user, "employee_get", None)
     return employee is not None and (
         employee.stage_set.exists() or employee.recruitment_set.exists()
+        or (getattr(employee, "interviewschedule_set", None) is not None and employee.interviewschedule_set.exists())
     )
 
 
