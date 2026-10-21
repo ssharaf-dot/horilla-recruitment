@@ -149,7 +149,7 @@ for role, user in users.items():
     checked(home.status_code == (403 if role == "unprivileged" else 302), role+" landing permissions")
     if role in {"recruiter","manager"}:
         req(c,"recruitment-dashboard")
-        req(c,"pipeline")
+        req(c,"pipeline",expected=(403,) if role == "manager" else (200,))
     for name in ("attendance-view","user-request-view","view-payroll-dashboard","employee-shift-view"):
         try:
             path = reverse(name)
