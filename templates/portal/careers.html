@@ -5,7 +5,7 @@
   {% if portal_brand.careers_banner %}<img class="rp-talent-image" src="{% url 'portal-banner' %}" alt="{{ portal_brand.careers_banner_alt }}" fetchpriority="high" decoding="async">{% endif %}
   <div class="rp-talent-scrim"></div>
   <div class="rp-talent-hero-inner">
-    <p class="rp-eyebrow">{{ portal_brand.organization_name|upper }} · {{ portal_brand.portal_name|upper }}</p>
+    <p class="rp-eyebrow">{{ portal_brand.portal_name|upper }}</p>
     <h1>{{ portal_brand.careers_headline }}</h1>
     <p class="rp-talent-intro">{{ portal_brand.careers_intro }}</p>
     <div class="rp-talent-actions"><a href="#open-roles" class="rp-button">Explore open roles {% include 'portal/icon.html' with name='arrow-down' %}</a><a href="{% url 'applicant-home' %}" class="rp-talent-return">Already applied? View your application {% include 'portal/icon.html' with name='arrow' %}</a></div>
