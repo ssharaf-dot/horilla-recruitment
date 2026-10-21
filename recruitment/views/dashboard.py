@@ -32,15 +32,19 @@ def stage_type_candidate_count(rec, stage_type):
 
 
 @login_required
-@manager_can_enter(perm="recruitment.view_recruitment")
 def dashboard(request):
-    """
-    This method is used to render dashboard for recruitment module
-    """
+    """Dispatch scoped role landings before the legacy HR/manager permission gate."""
     from django.conf import settings
     if getattr(settings, "RECRUITMENT_ONLY", False):
         from recruitment_portal.views import overview
         return overview(request)
+    return legacy_dashboard(request)
+
+
+@login_required
+@manager_can_enter(perm="recruitment.view_recruitment")
+def legacy_dashboard(request):
+    """Original Horilla dashboard, with its original access rules."""
     candidates = Candidate.objects.all()
     stage_chart_count = 0
     vacancy_chart = Recruitment.objects.filter(closed=False, is_event_based=False)
