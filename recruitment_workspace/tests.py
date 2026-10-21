@@ -168,7 +168,7 @@ class AccessTests(TestCase):
             ]:
                 self.assertEqual(self.client.get(target, HTTP_AUTHORIZATION="Bearer local-test-token").status_code, 403)
             for target in ["/media/recruitment/candidate/resume/test.pdf", "/media/base/company/icon/test.png", "/media/employee/employee/employee_profile/test.png"]:
-                self.assertEqual(self.client.get(target).status_code, 200)
+                self.assertEqual(self.client.get(target).status_code, 403 if user is None and "/candidate/" in target else 200)
 
     def test_dynamic_forms_retain_recruitment_and_block_hr_forms(self):
         self.client.force_login(self.user)
