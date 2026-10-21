@@ -111,3 +111,30 @@ class BrandingTests(TestCase):
     def test_public_reads_reject_write_methods(self):
         self.assertEqual(self.client.post(reverse('portal-careers')).status_code, 405)
         self.assertEqual(self.client.post(reverse('portal-logo')).status_code, 405)
+
+
+    def test_banner_is_reencoded_and_served_without_exposing_other_uploads(self):
+        stream = BytesIO(); Image.new('RGB', (80, 30), '#14574b').save(stream, 'JPEG')
+        upload = SimpleUploadedFile('banner.jpg', stream.getvalue(), content_type='image/jpeg')
+        form = BrandingForm(dict(self.data, logo_on_dark=True, careers_banner_alt='Demo property'), {'careers_banner': upload})
+        self.assertTrue(form.is_valid(), form.errors)
+        record = form.save()
+        self.assertTrue(record.careers_banner.name.endswith('.webp'))
+        self.assertTrue(record.logo_on_dark)
+        response = self.client.get(reverse('portal-banner'))
+        self.assertEqual(response['Content-Type'], 'image/webp')
+        self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
+        self.assertTrue(b''.join(response.streaming_content).startswith(b'RIFF'))
+        with patch('recruitment_portal.views.public_jobs', return_value=Jobs()):
+            page = self.client.get(reverse('portal-careers'))
+        self.assertContains(page, 'alt="Demo property"')
+        self.assertEqual(self.client.get('/careers/brand/banner/other-file').status_code, 404)
+        record.careers_banner.delete()
+
+    def test_banner_rejects_active_content_and_write_requests(self):
+        upload = SimpleUploadedFile('banner.svg', b'<svg onload="alert(1)"></svg>', content_type='image/svg+xml')
+        form = BrandingForm(self.data, {'careers_banner': upload})
+        self.assertFalse(form.is_valid())
+        self.assertIn('careers_banner', form.errors)
+        self.assertEqual(self.client.get(reverse('portal-banner')).status_code, 404)
+        self.assertEqual(self.client.post(reverse('portal-banner')).status_code, 405)

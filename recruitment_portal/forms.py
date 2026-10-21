@@ -19,7 +19,9 @@ class BrandingForm(forms.ModelForm):
                   'tagline': 'Short tagline', 'careers_headline': 'Careers headline',
                   'careers_intro': 'Careers introduction', 'accent_color': 'Brand colour',
                   'website_url': 'Company website', 'privacy_url': 'Privacy notice URL',
-                  'contact_email': 'Recruitment contact email', 'logo': 'Company logo'}
+                  'contact_email': 'Recruitment contact email', 'logo': 'Company logo',
+                  'careers_banner': 'Careers homepage banner', 'careers_banner_alt': 'Banner image description',
+                  'logo_on_dark': 'Use a dark background behind the logo'}
 
     def clean_accent_color(self):
         color = self.cleaned_data['accent_color']
@@ -49,6 +51,24 @@ class BrandingForm(forms.ModelForm):
         except (OSError, ValueError, Image.DecompressionBombError):
             raise forms.ValidationError('Use a valid PNG, JPEG or WebP image up to 4096 pixels.')
         return ContentFile(output.getvalue(), name=uuid.uuid4().hex + '.png')
+
+    def clean_careers_banner(self):
+        upload = self.cleaned_data.get('careers_banner')
+        if not upload or not hasattr(upload, 'content_type'):
+            return upload
+        if upload.size > 8 * 1024 * 1024:
+            raise forms.ValidationError('Use an image smaller than 8 MB.')
+        try:
+            image = Image.open(upload)
+            if image.format not in {'PNG', 'JPEG', 'WEBP'} or max(image.size) > 6000:
+                raise ValueError()
+            image.load()
+            image = image.convert('RGB')
+            output = BytesIO()
+            image.save(output, format='WEBP', quality=88)
+        except (OSError, ValueError, Image.DecompressionBombError):
+            raise forms.ValidationError('Use a PNG, JPEG or WebP image up to 6000 pixels.')
+        return ContentFile(output.getvalue(), name=uuid.uuid4().hex + '.webp')
 
 
 def application_form_class():
