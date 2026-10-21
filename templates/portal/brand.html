@@ -1,2 +1,2 @@
-{% if portal_brand.logo %}<img src="{% url 'portal-logo' %}" alt="{{ portal_brand.organization_name }}" class="rp-logo">{% else %}<span class="rp-monogram" aria-hidden="true">{{ portal_brand.organization_name|slice:':1' }}</span>{% endif %}
+{% if portal_brand.logo %}<span class="rp-logo-plate{% if portal_brand.logo_on_dark %} rp-logo-on-dark{% endif %}"><img src="{% url 'portal-logo' %}" alt="{{ portal_brand.organization_name }}" class="rp-logo"></span>{% else %}<span class="rp-monogram" aria-hidden="true">{{ portal_brand.organization_name|slice:':1' }}</span>{% endif %}
 <span class="rp-brand-text"><strong>{{ portal_brand.organization_name }}</strong><small>{{ portal_brand.portal_name }}</small></span>
