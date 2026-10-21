@@ -169,3 +169,6 @@ deploy/production-*.png
 !recruitment_portal/migrations/*.py
 !deploy/.env.recruitment.example
 .runtime-cache/
+
+# Keep workspace workflow migrations in the public fork.
+!recruitment_experience/migrations/*.py
