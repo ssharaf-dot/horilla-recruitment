@@ -41,7 +41,7 @@ def workspace(view):
 
 
 def context(request, **values):
-    return dict(can_lead=leadership(request.user), can_approve=request.user.has_perm('recruitment_experience.approve_hiringrequest'), can_create=request.user.has_perm('recruitment.add_recruitment'), **values)
+    return dict(can_hr=request.user.has_perm('recruitment.view_recruitment'), can_hire=scoped_jobs(request.user).exists(), can_lead=leadership(request.user), can_approve=request.user.has_perm('recruitment_experience.approve_hiringrequest'), can_create=request.user.has_perm('recruitment.add_recruitment'), **values)
 
 
 def annotated_jobs(jobs):

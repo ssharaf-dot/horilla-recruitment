@@ -22,7 +22,7 @@ HIDDEN_MODULES = frozenset({
 # slipping through merely because they belong to the base app.
 BASE_ROUTES = frozenset({
     "portal-careers", "portal-job-detail", "portal-apply", "portal-application-received",
-    "portal-logo", "portal-branding",
+    "portal-logo", "portal-banner", "portal-branding",
     "applicant-home", "applicant-login", "applicant-register", "applicant-logout",
     "applicant-detail", "applicant-cv", "applicant-questionnaire", "workspace-applicant-preview",
     "home-page", "404", "login", "forgot-password", "employee-reset-password",
@@ -199,6 +199,22 @@ class RecruitmentOnlyMiddleware(MiddlewareMixin):
             return HttpResponseForbidden(
                 _("This module is unavailable in recruitment-only mode.")
             )
+        # Applicant documents must not inherit the legacy Referer-based media exemption.
+        # Scoped roles use the workspace/applicant document endpoints instead.
+        if (request.resolver_match.url_name == "protected_media"
+            and view_kwargs.get("path", "").startswith("recruitment/candidate/")
+            and not (request.user.is_authenticated and request.user.has_perm("recruitment.view_candidate"))):
+            return HttpResponseForbidden(_("Use your application document link to access this file."))
+        # Assigned managers/interviewers and leadership use the scoped workspace.
+        # Legacy recruitment handlers were written for broader HR permissions.
+        name = request.resolver_match.url_name or ""
+        if (request.path_info.startswith("/recruitment/")
+            and request.user.is_authenticated
+            and not request.user.has_perm("recruitment.view_recruitment")
+            and dashboard_accessible(request.user)
+            and not name.startswith("workspace-")
+            and name not in {"recruitment-dashboard", "candidate-survey", "open-recruitments"}):
+            return HttpResponseForbidden(_("Use your assigned recruitment workspace for this action."))
         if request.resolver_match.url_name == "open-recruitments" and request.method in {"GET", "HEAD"}:
             return redirect("portal-careers")
         if (

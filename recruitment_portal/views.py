@@ -101,6 +101,21 @@ def logo(request):
     return response
 
 
+@require_http_methods(['GET', 'HEAD'])
+def banner(request):
+    enabled()
+    brand = get_branding()
+    if not brand.careers_banner:
+        raise Http404()
+    try:
+        response = FileResponse(brand.careers_banner.open('rb'), content_type='image/webp')
+    except FileNotFoundError:
+        raise Http404()
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'no-cache'
+    return response
+
+
 @login_required(login_url='login')
 def overview(request):
     enabled()
