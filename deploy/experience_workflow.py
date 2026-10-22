@@ -10,12 +10,12 @@ from django.contrib.auth.models import User, Permission
 from django.contrib.auth.hashers import make_password
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
-from django.test import Client
+from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from recruitment.models import Recruitment, Candidate, Stage, InterviewSchedule, StageNote, RecruitmentSurvey, RecruitmentSurveyAnswer
 from employee.models import Employee, EmployeeWorkInformation
-from recruitment_experience.models import ReviewRequest, InterviewFeedback, HiringRequest, ApplicantAccount, ApplicantApplication
+from recruitment_experience.models import ReviewRequest, InterviewFeedback, HiringRequest, ApplicantAccount, ApplicantApplication, ApplicationDraft, InterviewPlan, Division, DivisionAccess, VacancyProfile, NotificationDelivery, WorkflowEvent, Requisition
 from recruitment_experience.access import scoped_candidates, scoped_jobs
 
 assert settings.DATABASES['default']['NAME'] == 'horilla_staging', 'STAGING ONLY'
@@ -86,19 +86,24 @@ try:
         check(response.status_code == 200, 'render '+route)
         exports[route] = response.content.decode()
     check(a.post(url('workspace-candidate', candidate.pk), {'note': 'PRIVATE_INTERNAL_UX_TEST'}).status_code == 302, 'internal note saved')
-    check(a.post(url('workspace-stage', candidate.pk), {'stage': stage_interview.pk}).status_code == 302, 'stage move saved')
+    check(a.post(url('workspace-stage', candidate.pk), {'stage': stage_interview.pk}).status_code == 200, 'stage preview before save')
+    check(manager.post(url('workspace-stage', candidate.pk), {'stage': stage_interview.pk,'confirm':'yes','expected_stage':stage_applied.pk}).status_code == 403, 'manager cannot change stage')
+    check(a.post(url('workspace-stage', candidate.pk), {'stage': stage_interview.pk,'confirm':'yes','expected_stage':stage_applied.pk}).status_code == 302, 'stage move saved')
+    check(a.post(url('workspace-stage', candidate.pk), {'stage': stage_applied.pk,'confirm':'yes','expected_stage':stage_applied.pk}).status_code == 302, 'stale stage request redirected')
+    check(WorkflowEvent.objects.filter(candidate=candidate,kind='stage').count()==1,'stale request does not write again')
     candidate.refresh_from_db(); check(candidate.stage_id_id == stage_interview.pk, 'stage move persisted')
     check(a.post(url('workspace-review', candidate.pk), {'reviewer': roles['manager'].employee_get.pk}).status_code == 302, 'manager review requested')
     review = ReviewRequest.objects.get(candidate=candidate, reviewer=roles['manager'].employee_get)
     check(manager.get(url('workspace-manager')).status_code == 200, 'review appears in manager workspace')
-    check(manager.post(url('workspace-review-complete', review.pk), {'note': 'Recommend technical discussion based on relevant experience.'}).status_code == 302, 'manager recommendation submitted')
+    check(manager.post(url('workspace-review-complete', review.pk), {'recommendation':'advance', 'note': 'Recommend technical discussion based on relevant experience.'}).status_code == 302, 'manager recommendation submitted')
     review.refresh_from_db(); check(review.completed_at is not None, 'manager review completion persisted')
     future = timezone.localdate() + timedelta(days=2)
-    response = a.post(url('workspace-schedule', candidate.pk), {'interview_date': future.isoformat(), 'interview_time': '10:00', 'interviewers': [roles['manager'].employee_get.pk], 'details': 'Synthetic interview location - demo only'})
+    response = a.post(url('workspace-schedule', candidate.pk), {'date': future.isoformat(), 'time': '10:00', 'duration_minutes':45,'format':'in_person','location':'Synthetic office', 'interviewers': [roles['manager'].employee_get.pk], 'details': 'Synthetic interview location - demo only'})
     check(response.status_code == 302, 'interview scheduling saved')
     appointment = InterviewSchedule.objects.get(candidate_id=candidate)
     check(appointment.employee_id.filter(pk=roles['manager'].employee_get.pk).exists(), 'assigned interviewer persisted')
     check(manager.post(url('workspace-feedback', appointment.pk), {'technical': 4, 'communication': 4, 'evidence': 'Synthetic interview evidence.', 'recommendation': 'proceed'}).status_code == 200, 'future interview feedback blocked')
+    InterviewPlan.objects.filter(interview=appointment).update(starts_at=timezone.now()-timedelta(days=1))
     appointment.interview_date = timezone.localdate() - timedelta(days=1)
     appointment.save(update_fields=['interview_date'])
     check(manager.post(url('workspace-feedback', appointment.pk), {'technical': 4, 'communication': 4, 'evidence': 'Synthetic interview evidence.', 'recommendation': 'proceed'}).status_code == 302, 'interviewer feedback submitted')
@@ -138,16 +143,43 @@ try:
     question_text = 'Synthetic UX screening ' + suffix
     question = RecruitmentSurvey.objects.create(question=question_text, type='text', is_mandatory=True)
     question.recruitment_ids.add(job)
+    attachment_question=RecruitmentSurvey.objects.create(question='Synthetic attachment '+suffix,type='file',is_mandatory=True)
+    attachment_question.recruitment_ids.add(job)
     upload = SimpleUploadedFile('public-test.pdf', pdf.tobytes(), content_type='application/pdf')
-    response = public.post(url('portal-apply', job.pk), {'name': 'Synthetic Public UX Applicant', 'email': email, 'mobile': '0500000044', 'job_position_id': position.pk, 'resume': upload, 'hired': 'on', 'stage_id': stage_interview.pk})
-    check(response.status_code == 302, 'public CV application submitted')
-    new = Candidate.objects.get(email=email); media.append(new.resume.name)
-    check(not new.hired and new.stage_id_id == stage_applied.pk, 'public application cannot inject hired or stage')
-    check(public.get(url('applicant-detail', new.pk)).status_code == 200, 'new public submission owned by its browser session')
-    if 'candidate-survey' in response.url:
-        check(public.get(response.url).status_code == 200, 'questionnaire still reachable after application')
-        response = public.post(url('candidate-survey'), {'text_' + question_text: 'Synthetic relevant experience.'})
-        check(response.status_code == 200 and RecruitmentSurveyAnswer.objects.filter(candidate_id=new).exists(), 'public questionnaire answers persisted')
+    Recruitment.objects.filter(pk=job.pk).update(optional_profile_image=True)
+    response=public.get(url('portal-apply',job.pk))
+    check(response.status_code==302,'application starts an owned draft')
+    draft=ApplicationDraft.objects.get(job=job,owner_key=public.session['application_draft_owner'])
+    draft_url=url('portal-apply-draft',job.pk,draft.pk)
+    check(client().get(draft_url).status_code==404,'another browser cannot resume draft')
+    response=public.post(draft_url+'?step=1',{'name':'Synthetic Public UX Applicant','email':email,'mobile':'+971500000044','job_position_id':position.pk,'hired':'on','stage_id':stage_interview.pk})
+    check(response.status_code==302,'draft details saved')
+    response=public.post(draft_url+'?step=2',{'resume':upload})
+    draft.refresh_from_db();media.append(draft.resume.name)
+    check(response.status_code==302,'draft CV saved')
+    check(not Candidate.objects.filter(email=email).exists(),'incomplete application stays out of HR queue')
+    values={}
+    for item in draft.questions:
+        key='q'+str(item['id'])
+        if item['type']=='text' or item['type']=='textarea':values[key]='Synthetic relevant experience.'
+        elif item['type'] in ['options','multiple']: values[key]=[(item['options'] or '').split(',')[0].strip()] if item['type']=='multiple' else (item['options'] or '').split(',')[0].strip()
+        elif item['type']=='checkbox': values[key]='yes'
+        elif item['type']=='date':values[key]=str(timezone.localdate())
+        elif item['type'] in ['number','percentage','rating']:values[key]='3'
+        elif item['type']=='file':values[key]=SimpleUploadedFile('test.txt',b'Synthetic evidence')
+    check(public.post(draft_url+'?step=3',{}).status_code==200,'required question blocks progress')
+    check(public.post(draft_url+'?step=3',values).status_code==302,'required questionnaire saved before candidate exists')
+    draft.refresh_from_db();media.extend(v for k,v in draft.attachments.items())
+    response=public.post(draft_url+'?step=4',{'confirm':'on'})
+    check(response.status_code==302,'reviewed application submitted')
+    new=Candidate.objects.get(email=email)
+    check(not new.hired and new.stage_id_id==stage_applied.pk,'public application cannot inject hired or stage')
+    public.post(draft_url+'?step=4',{'confirm':'on'})
+    check(Candidate.objects.filter(email=email).count()==1,'repeated final submit creates one candidate')
+    check(RecruitmentSurveyAnswer.objects.filter(candidate_id=new).exists(),'questions and application submitted together')
+    check(a.get(url('workspace-attachment',new.pk,'q'+str(attachment_question.pk))).status_code==200,'HR can download protected screening attachment')
+    check(leader.get(url('workspace-attachment',new.pk,'q'+str(attachment_question.pk))).status_code==404,'leadership cannot download screening attachment')
+    check(public.get(url('applicant-detail',new.pk)).status_code==200,'new submission belongs to browser session')
     response = public.get(url('applicant-home'))
     check(response.status_code == 200, 'guest application tracking works')
     exports['applicant-home'] = response.content.decode()
@@ -168,7 +200,69 @@ try:
         check(response.status_code == 302, 'fresh account may register without adopting existing applicant records')
         check(impostor.get(url('applicant-detail', unowned.pk)).status_code == 404, 'registering matching email never claims an old application')
     exports['applicant-detail'] = app.get(url('applicant-detail', candidate.pk)).content.decode()
+    exports['careers']=a.get(url('portal-careers')).content.decode()
+    exports['settings']=a.get(url('workspace-settings')).content.decode()
+    exports['requisitions']=a.get(url('workspace-requisitions')).content.decode()
+    exports['wizard']=public.get(draft_url+'?step=4').content.decode()
     Path('/tmp/experience-review.json.gz').write_bytes(gzip.compress(json.dumps(exports).encode()))
+    check(a.get(url('workspace-document-page',candidate.pk,1)).status_code==200,'protected CV renders as an image')
+    check(leader.get(url('workspace-document',candidate.pk)).status_code==404,'leadership cannot preview CV')
+    check(manager.post(url('workspace-schedule',candidate.pk),{}).status_code==403,'manager cannot schedule interview')
+    for name in ['workspace-settings','workspace-requisitions','workspace-vacancy-new']:
+        check(a.get(url(name)).status_code==200,'new HR screen '+name)
+    for name in ['workspace-job-settings','workspace-vacancy-edit','workspace-job-team','workspace-questions','workspace-publish']:
+        check(a.get(url(name,job.pk)).status_code==200,'vacancy configuration '+name)
+    from recruitment_experience.services import interview_time
+    legacy=InterviewSchedule.objects.create(candidate_id=candidate,interview_date=future,interview_time='10:00')
+    legacy.refresh_from_db()
+    with override_settings(RECRUITMENT_LEGACY_TIME_ZONE='Asia/Singapore'):
+        check(interview_time(legacy).hour==6,'legacy Singapore instant is preserved as 06 Dubai')
+    cal=a.get(url('workspace-calendar',legacy.pk)).content
+    response=a.post(url('workspace-interview-cancel',legacy.pk),{'reason':'Synthetic cancellation','confirm':'on'})
+    check(response.status_code==302,'interview cancellation confirmed')
+    cal2=a.get(url('workspace-calendar',legacy.pk)).content
+    check(next(x for x in cal.splitlines() if x.startswith(b'UID:'))==next(x for x in cal2.splitlines() if x.startswith(b'UID:')),'calendar UID stable across cancellation')
+    check(b'STATUS:CANCELLED' in cal2,'cancelled calendar carries cancellation status')
+    peer=InterviewSchedule.objects.create(candidate_id=candidate,interview_date=timezone.localdate()-timedelta(days=1),interview_time='09:00')
+    peer.employee_id.set([roles['manager'].employee_get,roles['outsider'].employee_get])
+    InterviewFeedback.objects.create(interview=peer,author=roles['outsider'],technical=3,communication=3,evidence='PRIVATE_PEER_SCORE_BEFORE_OWN_SUBMISSION',recommendation='more_information')
+    check(b'PRIVATE_PEER_SCORE_BEFORE_OWN_SUBMISSION' not in manager.get(url('workspace-candidate',candidate.pk)).content,'peer assessment hidden until own submission')
+    manager.post(url('workspace-feedback',peer.pk),{'technical':4,'communication':4,'evidence':'Independent synthetic assessment','recommendation':'proceed'})
+    check(b'PRIVATE_PEER_SCORE_BEFORE_OWN_SUBMISSION' in manager.get(url('workspace-candidate',candidate.pk)).content,'peer assessment visible after own submission')
+    check(public.post(url('applicant-action',new.pk,'contact'),{'details':'+971500000055','confirm':'on'}).status_code==302,'applicant can update own phone')
+    check(otherapp.get(url('applicant-action',new.pk,'withdraw')).status_code==404,'other applicant cannot withdraw application')
+    check(public.post(url('applicant-action',new.pk,'withdraw'),{'confirm':'on','details':'Synthetic test withdrawal'}).status_code==302,'applicant can confirm own withdrawal')
+    new.refresh_from_db();check(new.canceled and new.workspace_events.filter(kind='withdrawn').exists(),'withdrawal recorded without deleting application')
+    division=Division.objects.first();otherdivision=Division.objects.exclude(pk=division.pk).first()
+    VacancyProfile.objects.update_or_create(job=job,defaults={'division':division})
+    if otherjob:
+        VacancyProfile.objects.update_or_create(job=otherjob,defaults={'division':otherdivision})
+    original_jobs=Recruitment.objects.count()
+    response=manager.post(url('workspace-requisitions'),{'title':'Synthetic approved vacancy','division':division.pk,'employer':job.company_id_id,'openings':2,'reason':'Synthetic vacancy approval scenario','approver':admin.pk})
+    check(response.status_code==302,'new vacancy requisition submitted')
+    req=Requisition.objects.get(title='Synthetic approved vacancy')
+    check(manager.post(url('workspace-requisition-decide',req.pk),{'decision':'approved','confirm':'yes'}).status_code==403,'requester cannot approve requisition')
+    check(a.post(url('workspace-requisition-decide',req.pk),{'decision':'approved','confirm':'yes'}).status_code==302,'named approver confirms requisition')
+    check(Recruitment.objects.count()==original_jobs,'approval alone does not publish or create a job')
+    payload={'title':'Synthetic approved vacancy','company_id':job.company_id_id,'open_positions':[position.pk],'vacancy':99,'description':'A synthetic vacancy with clear responsibilities.','start_date':str(timezone.localdate()),'end_date':str(timezone.localdate()+timedelta(days=40)),'optional_resume':''}
+    response=a.post(url('workspace-vacancy-new')+'?requisition='+str(req.pk),payload)
+    check(response.status_code==302,'approved requisition becomes a draft vacancy')
+    req.refresh_from_db();created=req.job
+    check(created and created.vacancy==2 and not created.is_published,'approved headcount used and new job remains unpublished')
+    a.post(url('workspace-vacancy-new')+'?requisition='+str(req.pk),payload)
+    check(Recruitment.objects.count()==original_jobs+1,'repeated prepare cannot duplicate vacancy')
+    response=a.post(url('workspace-publish',created.pk),{'action':'publish','confirm':'on'})
+    check(response.status_code==302 and Recruitment.objects.get(pk=created.pk).is_published,'completed publication checklist publishes approved vacancy')
+    check(a.get(url('workspace-offer',candidate.pk)).status_code==200,'offer outcome screen renders')
+    check(a.post(url('workspace-offer',candidate.pk),{'outcome':'joined','date':str(timezone.localdate()),'evidence':'Synthetic invalid jump','confirm':'on'}).status_code==200,'offer cannot skip to joined')
+    scoped=roles['outsider'];DivisionAccess.objects.create(user=scoped,division=division,role='recruiter')
+    restricted=client(scoped)
+    check(restricted.get(url('workspace-candidate',candidate.pk)).status_code==200,'division recruiter can open permitted application')
+    if otherjob:check(restricted.get(url('workspace-job',otherjob.pk)).status_code==404,'division recruiter denied another division direct job')
+    check(restricted.get(url('recruitment-view')).status_code==403,'division restriction cannot bypass through legacy tools')
+    check(not NotificationDelivery.objects.filter(status='sent').exists(),'unconnected delivery never claims sent')
+    check(manager.post(url('workspace-offer',candidate.pk),{}).status_code==403,'manager cannot record offer outcomes')
+    check(Recruitment.objects.get(pk=job.pk).company_id_id==job.company_id_id,'existing legal employer preserved')
     transaction.set_rollback(True)
 finally:
  for name in media:
