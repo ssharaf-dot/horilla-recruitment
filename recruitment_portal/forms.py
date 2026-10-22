@@ -15,7 +15,7 @@ class BrandingForm(forms.ModelForm):
         exclude = ['id', 'updated_at']
         widgets = {'careers_intro': forms.Textarea(attrs={'rows': 4}),
                    'accent_color': forms.TextInput(attrs={'type': 'color'})}
-        labels = {'portal_name': 'Portal name', 'organization_name': 'Company name',
+        labels = {'portal_name': 'Portal name', 'organization_name': 'Organization or group name',
                   'tagline': 'Short tagline', 'careers_headline': 'Careers headline',
                   'careers_intro': 'Careers introduction', 'accent_color': 'Brand colour',
                   'website_url': 'Company website', 'privacy_url': 'Privacy notice URL',

@@ -4,3 +4,21 @@
 .wx .wx-brand .rp-brand{align-items:flex-start;flex-direction:column;gap:12px}.wx .wx-brand .rp-logo{width:170px;height:auto;max-height:36px}.wx .wx-brand .rp-brand-text strong{font-size:12px}.wx .wx-brand .rp-brand-text small{font-size:10px;line-height:1.6}.wx-sidebar nav>a{display:flex;align-items:center;gap:11px}.wx-sidebar .rp-icon{width:18px;height:18px}.wx .wx-brand{font-size:14px}.wx .rp-logo-on-dark{background:#163c35}
 
 .wx .wx-brand{display:flex;flex-direction:column;align-items:flex-start;gap:12px}.wx .wx-brand .rp-brand-text{display:flex;flex-direction:column;gap:3px}
+
+/* Audit fixes for long labels, compact navigation and narrow screens. */
+.wx-layout>div,.wx-main,.wx-heading>div,.wx-profile>*{min-width:0}
+.wx-nav-panel{display:flex;flex-direction:column;gap:24px;flex:1;min-height:0}
+.wx-menu-toggle{display:none}.wx .rp-logo-plate{max-width:100%;padding:8px}
+.wx .wx-brand .rp-logo{width:154px;max-width:100%;height:auto}
+.wx-heading h1,.wx-card h2,.wx-card h3,.wx-kv>*{overflow-wrap:anywhere}
+.wx-section-head{flex-wrap:wrap;align-items:flex-start}.wx-section-head>h2{min-width:0}
+.wx-kv{flex-wrap:wrap;align-items:baseline}.wx-kv>strong{margin-left:auto}
+.wx-row>div{min-width:0;overflow-wrap:anywhere}.wx-row .wx-button{max-width:100%;white-space:normal}
+.wx-job-grid .wx-badge{align-self:flex-start}.wx-job-grid .wx-card h2{min-height:50px}
+.wx-table th,.wx-table td{overflow-wrap:anywhere}.wx-table-wrap{max-width:100%}
+.wx-board{scrollbar-width:auto;scrollbar-color:#729084 #e4eae6;scroll-padding:16px}
+.wx-pdf-help{margin:0 0 12px!important}.wx-document{margin-top:0}
+.wx-public .rp-public-header{background:var(--rp-accent);color:#fff}
+.wx-public .rp-public-header .rp-brand-text small{color:#e3ede8}
+@media(max-width:850px){.wx-topbar{height:auto;min-height:64px;flex-wrap:wrap;padding-top:12px;padding-bottom:12px}.wx-user{flex-wrap:wrap}.wx-kv{gap:8px}.wx-profile .wx-document{height:500px}}
+@media(max-width:600px){.wx-sidebar{flex-direction:row;align-items:center;justify-content:space-between;gap:12px}.wx .wx-brand{max-width:calc(100% - 90px);gap:8px}.wx .wx-brand .rp-brand-text strong{font-size:11px}.wx .wx-brand .rp-brand-text small{font-size:10px;margin:0}.wx .wx-brand .rp-logo{width:145px}.wx-menu-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:10px;border:1px solid var(--wx-line);border-radius:7px;color:var(--wx-brand);background:#fff}.wx-menu-toggle .rp-icon{width:17px;height:17px}.wx-nav-panel{display:none;flex-basis:100%;gap:14px}.wx-nav-open .wx-nav-panel{display:flex}.wx-sidebar nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;gap:6px}.wx-sidebar nav a{white-space:normal;font-size:12px;padding:10px;min-width:0}.wx-sidebar .wx-secondary{padding-top:12px}.wx-sidefooter{display:none}.wx-topbar{min-height:58px;padding:12px 16px;gap:8px}.wx-topbar>span{font-size:11px}.wx-user{gap:7px;font-size:11px}.wx-user .wx-avatar{width:28px;height:28px}.wx-metrics{gap:10px}.wx-metric{padding:14px}.wx-section-head{gap:10px}.wx-section-head .wx-badge{font-size:10px}.wx-table{min-width:560px}.wx-board{grid-auto-columns:minmax(250px,85%)}.wx-document{display:none}.wx-job-grid .wx-card h2{min-height:0}.wx-public .rp-public-header{padding:18px 20px}.wx-public .rp-public-header nav{gap:12px}}
