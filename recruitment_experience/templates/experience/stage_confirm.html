@@ -1,0 +1,8 @@
+{% extends 'experience/base.html' %}{% block content %}
+<a href="{% url 'workspace-candidate' candidate.pk %}">← Back to {{ candidate.name }}</a>
+<div class="wx-heading"><div><h1>Review the application update</h1><p>{{ candidate.name }} · {{ candidate.recruitment_id.title }}</p></div></div>
+<section class="wx-card"><h2>{{ candidate.stage_id.stage }} → {{ target.stage }}</h2><p>Applicant status: <strong>{{ next_label }}</strong>. Review the exact shared message below before saving.</p>
+<form class="wx-form" method="post">{% csrf_token %}<input type="hidden" name="stage" value="{{ target.pk }}"><input type="hidden" name="expected_stage" value="{{ candidate.stage_id_id }}"><input type="hidden" name="confirm" value="yes">
+<div><label for="reason">{% if reason_required %}Rejection reason required{% else %}Internal decision note optional{% endif %}</label><textarea id="reason" name="reason" maxlength="2000" rows="3" {% if reason_required %}required{% endif %}>{{ reason }}</textarea><small class="wx-caption">Hiring team only. This reason will not be copied into the applicant message.</small></div>
+<div><label for="shared">Visible to the applicant</label><textarea id="shared" name="shared_message" maxlength="2000" rows="4" required>{{ shared_message }}</textarea></div>
+<p class="wx-caption">The message appears in the applicant portal. External email delivery is not connected yet.</p><div class="wx-actions"><button class="wx-button">Confirm application update</button><a class="wx-button secondary" href="{% url 'workspace-candidate' candidate.pk %}">Cancel</a></div></form></section>{% endblock %}
