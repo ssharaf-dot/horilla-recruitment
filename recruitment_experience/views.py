@@ -46,6 +46,8 @@ def workspace(view):
 def context(request, **values):
     data = dict(divisions=Division.objects.filter(is_active=True).filter(pk__in=DivisionAccess.objects.filter(user=request.user).values('division_id')) if not request.user.is_superuser and DivisionAccess.objects.filter(user=request.user).exists() else Division.objects.filter(is_active=True), selected_division=request.GET.get('division', ''), can_hr=recruiter(request.user), can_hire=recruiter(request.user) or scoped_jobs(request.user).exists(), can_lead=leadership(request.user), can_approve=request.user.has_perm('recruitment_experience.approve_hiringrequest'), can_create=request.user.has_perm('recruitment.add_recruitment'))
     data.update(values)
+    from .phase_data import navigation
+    data['phase_nav'] = navigation(request, data.get('active',''), data.get('candidate'))
     return data
 
 
@@ -88,7 +90,8 @@ def today(request):
     appointments = [decorate_interview(i) for i in scoped_interviews(request.user).filter(candidate_id__in=candidates, completed=False)]
     interviews = sorted([i for i in appointments if not i.cancelled and i.dubai_time.date() == timezone.localdate()], key=lambda i:i.dubai_time)
     applied = candidates.filter(stage_id__stage_type='applied').order_by('created_at')
-    return render(request, 'experience/today.html', context(request, active='today', title='Recruitment overview', new_count=applied.count(), review_count=reviews.count(), overdue_count=overdue.count(), today_count=len(interviews), applied=applied[:10], reviews=reviews[:10], overdue=overdue[:10], interviews=interviews, jobs=enrich_jobs(jobs)[:5]))
+    from .phase_views import workflow_overview
+    return render(request, 'experience/today.html', context(request, **workflow_overview(request), active='today', title='Hiring workspace', new_count=applied.count(), review_count=reviews.count(), overdue_count=overdue.count(), today_count=len(interviews), applied=applied[:10], reviews=reviews[:10], overdue=overdue[:10], interviews=interviews, jobs=enrich_jobs(jobs)[:5]))
 
 @workspace
 @require_http_methods(['GET', 'HEAD'])
@@ -108,7 +111,8 @@ def job(request, pk):
     columns, outcomes = [], []
     for stage in record.stage_set.filter(is_active=True).order_by('sequence', 'pk'):
         column = {'stage': stage, 'candidates': [decorate_candidate(c) for c in candidates.filter(stage_id=stage).order_by('created_at')]}
-        (outcomes if stage.stage_type in ['hired', 'cancelled'] else columns).append(column)
+        column['tone'] = '6' if stage.stage_type=='hired' else 'closed' if stage.stage_type=='cancelled' else str(min(len(columns)+2,5))
+        (outcomes if stage.stage_type=='cancelled' else columns).append(column)
     record = enrich_jobs(scoped_jobs(request.user).filter(pk=pk))[0]
     return render(request, 'experience/job.html', context(request, active='jobs', title=record.title, job=record, columns=columns, outcomes=outcomes, list_view=request.GET.get('view')=='list', applications=[decorate_candidate(c) for c in candidates.order_by('created_at')], managers=record.recruitment_managers.all(), review_count=ReviewRequest.objects.filter(candidate__in=candidates, completed_at__isnull=True).count()))
 
@@ -133,11 +137,17 @@ def candidates(request):
         qs = qs.filter(workspace_reviews__in=pending_reviews(request.user, qs))
     elif queue == 'feedback':
         qs = qs.filter(candidate_interview__in=overdue_feedback(request.user))
+    lifecycle = request.GET.get('phase', '')
+    if lifecycle in ['screen','interview','offer','handover','closed']:
+        from .phase_data import candidate_phase
+        qs = qs.filter(pk__in=[c.pk for c in qs if candidate_phase(c)==lifecycle])
+    pagination = request.GET.copy()
+    pagination.pop('page', None)
     from django.core.paginator import Paginator
     page = Paginator(qs.distinct().order_by('created_at'), 30).get_page(request.GET.get('page'))
     for record in page:
         decorate_candidate(record)
-    return render(request, 'experience/candidates.html', context(request, active='candidates', title='Applications', candidates=page, query=query, queue=queue))
+    return render(request, 'experience/candidates.html', context(request, active='candidates', title='Applications', candidates=page, query=query, queue=queue, lifecycle=lifecycle, pagination_query=pagination.urlencode()))
 
 @workspace
 @require_http_methods(['GET', 'POST', 'HEAD'])
@@ -164,7 +174,11 @@ def candidate(request, pk):
     if not can_coordinate(request.user, record):
         own = InterviewFeedback.objects.filter(author=request.user).values('interview_id')
         visible_feedback = visible_feedback.filter(Q(author=request.user) | Q(interview_id__in=own))
-    return render(request, 'experience/candidate.html', context(request, active='candidates', title=record.name, candidate=record, note_form=note, can_coordinate=can_coordinate(request.user, record), stages=record.recruitment_id.stage_set.filter(is_active=True).exclude(stage_type__in=['hired','cancelled']).order_by('sequence'), attachments=[(key, next((q['question'] for q in draft.questions if key=='q'+str(q['id'])), 'Screening attachment')) for draft in ApplicationDraft.objects.filter(candidate=record) for key in draft.attachments if key!='profile'], all_stages=record.recruitment_id.stage_set.filter(is_active=True).order_by('sequence'), events=record.workspace_events.select_related('actor')[:30], review_form=ReviewDecisionForm(), notes=StageNote.objects.filter(candidate_id=record).select_related('updated_by').order_by('-created_at')[:20], answers=answers, interviews=[decorate_interview(i) for i in scoped_interviews(request.user).filter(candidate_id=record).order_by('-interview_date')], reviews=record.workspace_reviews.select_related('reviewer').all(), feedback=visible_feedback, reviewers=record.recruitment_id.recruitment_managers.filter(is_active=True)))
+    profile = getattr(record, 'talent_profile', None)
+    import re
+    skill_tags = [tag.strip() for tag in re.split(r'[,;\n]', profile.skills) if tag.strip()][:40] if profile else []
+    from .phase_data import candidate_phase
+    return render(request, 'experience/candidate.html', context(request, profile=profile, skill_tags=skill_tags, candidate_phase=candidate_phase(record), portfolio_url=record.portfolio if record.portfolio.startswith(('https://','http://')) else '', active='candidates', title=record.name, candidate=record, note_form=note, can_coordinate=can_coordinate(request.user, record), stages=record.recruitment_id.stage_set.filter(is_active=True).exclude(stage_type__in=['hired','cancelled']).order_by('sequence'), attachments=[(key, next((q['question'] for q in draft.questions if key=='q'+str(q['id'])), 'Screening attachment')) for draft in ApplicationDraft.objects.filter(candidate=record) for key in draft.attachments if key!='profile'], all_stages=record.recruitment_id.stage_set.filter(is_active=True).order_by('sequence'), events=record.workspace_events.select_related('actor')[:30], review_form=ReviewDecisionForm(), notes=StageNote.objects.filter(candidate_id=record).select_related('updated_by').order_by('-created_at')[:20], answers=answers, interviews=[decorate_interview(i) for i in scoped_interviews(request.user).filter(candidate_id=record).order_by('-interview_date')], reviews=record.workspace_reviews.select_related('reviewer').all(), feedback=visible_feedback, reviewers=record.recruitment_id.recruitment_managers.filter(is_active=True)))
 
 
 @workspace
@@ -300,7 +314,8 @@ def manager(request):
     jobs = enrich_jobs(permitted_jobs)
     reviews = pending_reviews(request.user, candidates)
     interviews = sorted([decorate_interview(i) for i in scoped_interviews(request.user, manager=True).filter(completed=False,candidate_id__in=candidates) if interview_time(i) >= timezone.now() and not decorate_interview(i).cancelled], key=lambda i:i.dubai_time)
-    return render(request, 'experience/manager.html', context(request, active='manager', title='Hiring manager', jobs=jobs, reviews=reviews, overdue=overdue_feedback(request.user, True).filter(candidate_id__in=candidates), next_interview=interviews[0] if interviews else None, remaining=sum(job.remaining for job in jobs)))
+    from .phase_views import workflow_overview
+    return render(request, 'experience/manager.html', context(request, **workflow_overview(request), active='manager', title='Hiring manager', jobs=jobs, reviews=reviews, overdue=overdue_feedback(request.user, True).filter(candidate_id__in=candidates), next_interview=interviews[0] if interviews else None, remaining=sum(job.remaining for job in jobs)))
 
 
 @workspace
@@ -484,7 +499,11 @@ def applicant_home(request):
 
 
 def applicant_context(candidate):
-    return {'candidate': candidate, 'public_status': public_status(candidate), 'stages': ['Received','Under review','Interview','Offer','Joined'], 'time_zone': 'Asia/Dubai', 'interviews': [decorate_interview(i) for i in InterviewSchedule.objects.filter(candidate_id=candidate).prefetch_related('employee_id').order_by('-interview_date', '-interview_time')], 'updates': StageNote.objects.filter(candidate_id=candidate, candidate_can_view=True).order_by('-created_at')[:20], 'questionnaire_complete': RecruitmentSurveyAnswer.objects.filter(candidate_id=candidate).exists(), 'has_questions': candidate.recruitment_id.recruitmentsurvey_set.exists()}
+    public = public_status(candidate)
+    active = 'joined' if candidate.offer_letter_status == 'joined' else 'joining' if candidate.offer_letter_status == 'accepted' else 'offer' if candidate.offer_letter_status == 'sent' else 'interview' if public == 'Interview' else 'received' if public == 'Received' else 'review'
+    journey=[dict(label=label, key=key, current=(key==active and public not in ['Withdrawn','Not progressing'])) for key,label in [('received','Received'),('review','Under review'),('interview','Interviews'),('offer','Offer'),('joining','Joining preparation')]]
+    if active=='joined':journey[-1]['current']=True
+    return {'candidate': candidate, 'public_journey':journey, 'public_status': public_status(candidate), 'stages': ['Received','Under review','Interview','Offer','Joined'], 'time_zone': 'Asia/Dubai', 'interviews': [decorate_interview(i) for i in InterviewSchedule.objects.filter(candidate_id=candidate).prefetch_related('employee_id').order_by('-interview_date', '-interview_time')], 'updates': StageNote.objects.filter(candidate_id=candidate, candidate_can_view=True).order_by('-created_at')[:20], 'questionnaire_complete': RecruitmentSurveyAnswer.objects.filter(candidate_id=candidate).exists(), 'has_questions': candidate.recruitment_id.recruitmentsurvey_set.exists()}
 
 
 @require_http_methods(['GET', 'HEAD'])
