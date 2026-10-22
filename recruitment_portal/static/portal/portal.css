@@ -58,3 +58,34 @@
 .rp-hero-search{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;background:#fff;color:#193c30;padding:18px;border-radius:14px;max-width:930px;margin-top:26px;align-items:end}.rp-hero-search label{grid-row:1;font-size:12px;font-weight:700}.rp-hero-search input,.rp-hero-search select{grid-row:2;min-width:0;width:100%;padding:13px;border:1px solid #c6d5cd;border-radius:7px;font:inherit;background:#fff;color:#183b2e}.rp-hero-search button{grid-row:2}.rp-divisions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#dce6df}.rp-divisions a{background:#f6f8f4;padding:24px 20px;color:#193e2f;text-decoration:none;display:flex;flex-direction:column;gap:8px}.rp-divisions span{font-size:13px}.rp-role-filters{display:flex;flex-wrap:wrap;align-items:end;gap:15px;margin:20px 0 28px}.rp-role-filters label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:600}.rp-role-filters input,.rp-role-filters select{padding:12px;border:1px solid #cad8d0;border-radius:8px;background:white;font:inherit;max-width:100%}.rp-job-division,.rp-job-deadline{font-size:13px;color:#4c6659}.rp-wizard-steps{display:flex;flex-wrap:wrap;gap:16px;padding:16px 0;list-style:none}.rp-wizard-steps [aria-current=step]{font-weight:700;color:#175b3f}@media(max-width:700px){.rp-hero-search{grid-template-columns:1fr;padding:14px}.rp-hero-search label,.rp-hero-search input,.rp-hero-search select,.rp-hero-search button{grid-row:auto}.rp-divisions{grid-template-columns:1fr 1fr}.rp-talent-hero-inner{padding-top:48px!important;padding-bottom:44px!important}.rp-role-filters label{width:100%}}@media(max-width:400px){.rp-divisions{grid-template-columns:1fr}}
 
 .rp-apply-steps{display:flex;flex-wrap:wrap;gap:10px;margin:24px 0;align-items:center}.rp-apply-steps>a,.rp-apply-steps>span{display:inline-flex;padding:9px 12px;border:1px solid #d5e0d8;border-radius:7px;font-size:13px;background:#fff;color:#52685b}.rp-apply-steps>a[aria-current=step]{background:var(--rp-accent,#28594e);border-color:var(--rp-accent,#28594e);color:#fff;font-weight:650}
+
+
+/* Clear, logo-led headers shared by careers and team sign-in. */
+.rp-public-header .rp-logo-plate + .rp-brand-text{display:none}
+.rp-public-header .rp-logo{width:232px;max-height:none;max-width:100%;height:auto}
+.rp-public-header nav a{font-size:14px;font-weight:650;letter-spacing:.65px;text-transform:uppercase}
+.rp-public-header .rp-monogram + .rp-brand-text strong{display:block;color:#fff}
+
+/* Compact team access with one type system and a clear form hierarchy. */
+.rp-login{background:#f3f6f3!important;min-height:100vh;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.rp-login .oh-auth{min-height:calc(100vh - 88px);height:auto;margin:0;padding:64px 24px;justify-content:center;gap:0}
+.rp-login .oh-auth-card{width:100%;max-width:456px;padding:36px;margin:0!important;border:1px solid #dce5df;border-radius:16px;box-shadow:0 12px 40px #182d2908}
+.rp-login-intro{margin-bottom:28px;text-align:left}
+.rp-login .rp-login-eyebrow{font-size:11px;font-weight:700;letter-spacing:1.6px;color:var(--rp-accent);margin:0 0 12px}
+.rp-login-intro h1{font-family:inherit;font-size:27px;font-weight:650;letter-spacing:-.7px;line-height:1.25;margin:0 0 12px}
+.rp-login-intro>p:last-child{font-size:14px;line-height:1.65;margin:0;color:#607169}
+.rp-login .oh-form-group{margin:0;padding:0}
+.rp-login .oh-input-group{margin:0 0 20px}
+.rp-login .oh-label{display:block;font-size:13px;font-weight:600;line-height:1.5;margin:0 0 8px;padding:0;color:var(--rp-ink)}
+.rp-login .oh-input{font-family:inherit;font-size:15px;line-height:1.5;min-height:48px;height:48px;padding:12px 14px;border:1px solid #cbd7d0;border-radius:7px;box-shadow:none;background:#fff;color:var(--rp-ink)}
+.rp-login .oh-input::placeholder{font-size:14px;color:#7b8981;opacity:1}
+.rp-login .oh-input--password{padding-right:48px}
+.rp-login .oh-password-input-container{height:48px}
+.rp-login .oh-password-input--toggle{height:46px;width:46px;min-height:0;top:1px;right:1px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:6px}
+.rp-login button[type=submit]{min-height:48px;height:auto;margin:8px 0 22px!important;padding:12px 18px;border-radius:7px;font-size:15px;font-weight:600;line-height:1.5;box-shadow:none;background:var(--rp-accent);border-color:var(--rp-accent);color:#fff;gap:8px}
+.rp-login button[type=submit]:hover{filter:brightness(.93)}
+.rp-login .oh-form-group>small{display:block;font-size:13px;line-height:1.5}
+.rp-login .oh-link{font-size:13px;color:var(--rp-accent)}
+.rp-login-careers{border-top:1px solid #e3eae5;padding-top:22px;margin-top:24px;font-size:13px;font-weight:500;line-height:1.7;text-align:center}
+@media(max-width:750px){.rp-public-header .rp-logo{width:210px}.rp-public-header nav a{font-size:13px;letter-spacing:.45px}.rp-login .rp-login-header{flex-direction:row;align-items:center;gap:20px}.rp-login-header .rp-brand{width:auto;flex:1}.rp-login-header nav{width:auto;flex-shrink:0}.rp-login-header nav a{font-size:11px;letter-spacing:.4px;gap:5px}.rp-login .oh-auth{min-height:calc(100vh - 80px);padding:36px 20px}.rp-login .oh-auth-card{padding:30px 26px}.rp-login-intro h1{font-size:25px}}
+@media(max-width:400px){.rp-public-header .rp-logo{width:200px}.rp-login-header .rp-logo{width:180px}.rp-login .oh-auth{padding:28px 16px}.rp-login .oh-auth-card{padding:28px 22px}.rp-login-intro h1{font-size:24px}}
