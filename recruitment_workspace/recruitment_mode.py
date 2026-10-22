@@ -25,6 +25,7 @@ BASE_ROUTES = frozenset({
     "portal-logo", "portal-banner", "portal-branding",
     "applicant-home", "applicant-login", "applicant-register", "applicant-logout",
     "applicant-detail", "applicant-cv", "applicant-questionnaire", "workspace-applicant-preview",
+    "applicant-document", "applicant-document-page", "applicant-action", "applicant-calendar", "portal-apply-draft", "portal-apply-receipt",
     "home-page", "404", "login", "forgot-password", "employee-reset-password",
     "reset-send-success", "change-password", "change-username", "two-factor",
     "send-otp", "logout", "settings", "general-settings", "user-group-create",
@@ -113,6 +114,11 @@ def dashboard_accessible(user):
     # script sends users back to '/', so reject here to avoid a landing loop.
     if user.has_perm("recruitment.view_recruitment") or user.has_perm("recruitment_experience.view_hiringoverview"):
         return True
+    from django.apps import apps
+    if apps.is_installed('recruitment_experience'):
+        from recruitment_experience.models import DivisionAccess
+        if DivisionAccess.objects.filter(user=user).exists():
+            return True
     employee = getattr(user, "employee_get", None)
     return employee is not None and (
         employee.stage_set.exists() or employee.recruitment_set.exists()
@@ -199,6 +205,15 @@ class RecruitmentOnlyMiddleware(MiddlewareMixin):
             return HttpResponseForbidden(
                 _("This module is unavailable in recruitment-only mode.")
             )
+        # Division-scoped HR must not escape workspace scoping through legacy routes,
+        # generic helpers or legacy media. Superusers retain protected administration.
+        from django.apps import apps
+        if apps.is_installed('recruitment_experience') and request.user.is_authenticated and not request.user.is_superuser:
+            from recruitment_experience.models import DivisionAccess
+            if DivisionAccess.objects.filter(user=request.user).exists():
+                name=request.resolver_match.url_name or ''
+                if not (name.startswith('workspace-') or name.startswith('applicant-') or name.startswith('portal-') or name in {'recruitment-dashboard','home-page','logout','login','health','set_language','get-language-code'}):
+                    return HttpResponseForbidden(_('Use your division recruitment workspace for this action.'))
         # Applicant documents must not inherit the legacy Referer-based media exemption.
         # Scoped roles use the workspace/applicant document endpoints instead.
         if (request.resolver_match.url_name == "protected_media"
