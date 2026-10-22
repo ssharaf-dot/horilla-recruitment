@@ -19,6 +19,13 @@
 </head>
 
 <body{% if recruitment_only %} class="rp-public rp-login"{% endif %}>
+    {% if recruitment_only %}
+    <a class="rp-skip" href="#username">Skip to sign-in</a>
+    <header class="rp-public-header rp-login-header">
+        <a class="rp-brand" href="{% url 'portal-careers' %}">{% include "portal/brand.html" %}</a>
+        <nav aria-label="Sign-in navigation"><a href="{% url 'portal-careers' %}">Explore careers <span aria-hidden="true">↗</span></a></nav>
+    </header>
+    {% endif %}
     <div id="main">
         <div class="oh-alert-container">
             {% for message in messages %}
@@ -28,13 +35,17 @@
             {% endfor %}
         </div>
         <main class="oh-auth">
-            <div class="oh-auth-card mb-4">{% if recruitment_only %}<div class="rp-login-brand">{% include "portal/brand.html" %}<h2>Welcome to your hiring workspace.</h2><p>Sign in to manage jobs, candidates and interviews.</p></div>{% endif %}
-                <h1 class="oh-onboarding-card__title oh-onboarding-card__title--h2 text-center my-3">
-                    {% trans "Sign In" %}
-                </h1>
-                <p class="text-muted text-center">
-                    {% if not recruitment_only %}{% trans "Please login to access the dashboard." %}{% endif %}
-                </p>
+            <div class="oh-auth-card mb-4">
+                {% if recruitment_only %}
+                <div class="rp-login-intro">
+                    <p class="rp-login-eyebrow">TEAM ACCESS</p>
+                    <h1>Sign in to your workspace</h1>
+                    <p>Manage jobs, candidates and interviews across the group.</p>
+                </div>
+                {% else %}
+                <h1 class="oh-onboarding-card__title oh-onboarding-card__title--h2 text-center my-3">{% trans "Sign In" %}</h1>
+                <p class="text-muted text-center">{% trans "Please login to access the dashboard." %}</p>
+                {% endif %}
                 <form method="post" class="oh-form-group">
                     {% csrf_token %}
                     <div class="oh-input-group">
@@ -68,7 +79,7 @@
                             </a>
                         </small>
                     {% endif %}
-                </form>{% if recruitment_only %}<a class="rp-login-careers" href="{% url 'portal-careers' %}">Looking for a job? Explore our careers site →</a>{% endif %}
+                </form>{% if recruitment_only %}<a class="rp-login-careers" href="{% url 'portal-careers' %}">Applying for a role? Explore open jobs →</a>{% endif %}
                 {% if initialize_database %}
                     <div>
                         <div class="d-flex gap-2">
