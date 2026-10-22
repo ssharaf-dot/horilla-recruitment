@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import operations, application
 
 urlpatterns = [
     path('recruitment/workspace/', views.today, name='workspace-today'),
@@ -10,7 +11,24 @@ urlpatterns = [
     path('recruitment/workspace/candidates/<int:pk>/stage/', views.stage, name='workspace-stage'),
     path('recruitment/workspace/candidates/<int:pk>/review/', views.review, name='workspace-review'),
     path('recruitment/workspace/reviews/<int:pk>/complete/', views.review_complete, name='workspace-review-complete'),
-    path('recruitment/workspace/candidates/<int:pk>/schedule/', views.schedule, name='workspace-schedule'),
+    path('recruitment/workspace/candidates/<int:pk>/schedule/', operations.schedule, name='workspace-schedule'),
+    path('recruitment/workspace/candidates/<int:pk>/interviews/<int:interview_pk>/edit/', operations.schedule, name='workspace-interview-edit'),
+    path('recruitment/workspace/interviews/<int:pk>/cancel/', operations.cancel_interview, name='workspace-interview-cancel'),
+    path('recruitment/workspace/interviews/<int:pk>/calendar/', operations.staff_calendar, name='workspace-calendar'),
+    path('recruitment/workspace/jobs/new/', operations.vacancy_form, name='workspace-vacancy-new'),
+    path('recruitment/workspace/jobs/<int:pk>/edit/', operations.vacancy_form, name='workspace-vacancy-edit'),
+    path('recruitment/workspace/jobs/<int:pk>/details/', operations.job_settings, name='workspace-job-settings'),
+    path('recruitment/workspace/jobs/<int:pk>/publication/', operations.publication, name='workspace-publish'),
+    path('recruitment/workspace/candidates/<int:pk>/attachments/<str:key>/', operations.questionnaire_attachment, name='workspace-attachment'),
+    path('recruitment/workspace/jobs/<int:pk>/team/', operations.job_team, name='workspace-job-team'),
+    path('recruitment/workspace/jobs/<int:pk>/questions/', operations.questions, name='workspace-questions'),
+    path('recruitment/workspace/settings/access/', operations.access_settings, name='workspace-access-settings'),
+    path('recruitment/workspace/settings/', operations.settings_home, name='workspace-settings'),
+    path('recruitment/workspace/requisitions/', operations.requisitions, name='workspace-requisitions'),
+    path('recruitment/workspace/requisitions/<int:pk>/decision/', operations.requisition_decide, name='workspace-requisition-decide'),
+    path('recruitment/workspace/candidates/<int:pk>/offer/', operations.offer, name='workspace-offer'),
+    path('recruitment/workspace/candidates/<int:pk>/document/', operations.document, name='workspace-document'),
+    path('recruitment/workspace/candidates/<int:pk>/document/pages/<int:page>/', operations.document, name='workspace-document-page'),
     path('recruitment/workspace/candidates/<int:pk>/cv/', views.candidate_cv, name='workspace-cv'),
     path('recruitment/workspace/interviews/', views.interviews, name='workspace-interviews'),
     path('recruitment/workspace/interviews/<int:pk>/feedback/', views.feedback, name='workspace-feedback'),
@@ -26,4 +44,10 @@ urlpatterns = [
     path('careers/account/applications/<int:pk>/', views.applicant_detail, name='applicant-detail'),
     path('careers/account/applications/<int:pk>/questionnaire/', views.applicant_questionnaire, name='applicant-questionnaire'),
     path('careers/account/applications/<int:pk>/cv/', views.applicant_cv, name='applicant-cv'),
+    path('careers/account/applications/<int:pk>/document/', operations.applicant_document, name='applicant-document'),
+    path('careers/account/applications/<int:pk>/document/pages/<int:page>/', operations.applicant_document, name='applicant-document-page'),
+    path('careers/account/applications/<int:pk>/actions/<str:action>/', operations.applicant_action, name='applicant-action'),
+    path('careers/account/interviews/<int:pk>/calendar/', operations.applicant_calendar, name='applicant-calendar'),
+    path('careers/jobs/<int:pk>/apply/draft/<uuid:draft_id>/', application.wizard, name='portal-apply-draft'),
+    path('careers/application-received/<uuid:draft_id>/', application.receipt, name='portal-apply-receipt'),
 ]

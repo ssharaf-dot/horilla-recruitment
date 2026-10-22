@@ -68,3 +68,38 @@ class ApplicantRegistrationForm(ApplicantAccessForm):
             except ValidationError as error:
                 self.add_error('password', error)
         return data
+
+
+class ReviewDecisionForm(forms.Form):
+    recommendation = forms.ChoiceField(choices=[('advance', 'Advance'), ('hold', 'Hold'), ('decline', 'Decline')])
+    note = forms.CharField(max_length=4000, label='Reason and evidence', widget=forms.Textarea(attrs={'rows': 4}))
+
+
+class InterviewPlanForm(forms.Form):
+    date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
+    time = forms.TimeField(widget=forms.TimeInput(attrs={'type': 'time'}), help_text='Dubai time (Asia/Dubai, UTC+04:00)')
+    duration_minutes = forms.IntegerField(min_value=15, max_value=240, initial=45)
+    format = forms.ChoiceField(choices=[('in_person', 'In person'), ('online', 'Online'), ('phone', 'Phone')])
+    location = forms.CharField(max_length=240, required=False)
+    meeting_url = forms.URLField(required=False)
+    interviewers = forms.ModelMultipleChoiceField(queryset=None)
+    details = forms.CharField(max_length=2000, label='Instructions visible to the applicant', widget=forms.Textarea(attrs={'rows': 3}))
+
+    def __init__(self, *args, employees, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['interviewers'].queryset = employees
+
+    def clean(self):
+        data = super().clean()
+        from datetime import datetime
+        from .services import WORKING_ZONE
+        if data.get('date') and data.get('time'):
+            starts = datetime.combine(data['date'], data['time'], tzinfo=WORKING_ZONE)
+            if starts <= timezone.now():
+                self.add_error('time', 'Choose an interview time in the future.')
+            data['starts_at'] = starts
+        if data.get('format') == 'online' and not data.get('meeting_url'):
+            self.add_error('meeting_url', 'Add the online meeting link. Meeting creation is not connected yet.')
+        if data.get('format') == 'in_person' and not data.get('location'):
+            self.add_error('location', 'Add the interview location.')
+        return data
