@@ -1,8 +1,10 @@
 from django.urls import path
 from . import views
-from . import operations, application
+from . import operations, application, phase_views, profile_views
 
 urlpatterns = [
+    path('recruitment/workspace/phases/<slug:slug>/', phase_views.phase, name='workspace-phase'),
+    path('recruitment/workspace/candidates/<int:pk>/profile/', profile_views.profile_edit, name='workspace-profile-edit'),
     path('recruitment/workspace/', views.today, name='workspace-today'),
     path('recruitment/workspace/jobs/', views.jobs, name='workspace-jobs'),
     path('recruitment/workspace/jobs/<int:pk>/', views.job, name='workspace-job'),

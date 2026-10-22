@@ -147,3 +147,17 @@ class Requisition(models.Model):
     decided_at = models.DateTimeField(null=True, blank=True)
     job = models.OneToOneField('recruitment.Recruitment', on_delete=models.PROTECT, null=True, blank=True, related_name='workspace_requisition')
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class CandidateProfile(models.Model):
+    """HR-reviewed profile for one application; CV extraction never saves itself."""
+    candidate = models.OneToOneField('recruitment.Candidate', on_delete=models.CASCADE, related_name='talent_profile')
+    headline = models.CharField(max_length=160, blank=True)
+    about = models.TextField(max_length=4000, blank=True)
+    experience = models.TextField(max_length=6000, blank=True)
+    education = models.TextField(max_length=4000, blank=True)
+    skills = models.TextField(max_length=2000, blank=True)
+    source_resume_sha256 = models.CharField(max_length=64, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
