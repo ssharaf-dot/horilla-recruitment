@@ -62,11 +62,39 @@ try:
   for who,c in [('HR',a),('manager',manager),('leadership',leader)]:
    for spec in PHASES:
     response=phase(c,spec['slug']);check(response.status_code==200,who+' opens phase '+spec['slug'])
-    check(b'aria-label="Recruitment phases"' in response.content,who+' has phase navigation '+spec['slug'])
+    check(b'aria-label="Recruitment work areas"' in response.content,who+' has phase navigation '+spec['slug'])
     if who=='HR':exports['phase-'+spec['slug']]=response.content.decode()
     if who=='leadership' and spec['slug'] not in ['plan','attract']:
      check(candidate.name.encode() not in response.content,'leadership phase does not expose applicant '+spec['slug'])
    if who=='manager' and other:check(other.email.encode() not in phase(c,'screen').content,'manager phase excludes unassigned applicant')
+  from recruitment_experience.work_areas import AREAS
+  for who,c in [('HR',a),('manager',manager),('leadership',leader)]:
+   for area_spec in AREAS:
+    for tab,label in area_spec['tabs']:
+     response=c.get(reverse('workspace-area',args=[area_spec['slug']]),{'tab':tab})
+     check(response.status_code==200,who+' opens work area '+area_spec['slug']+'/'+tab)
+     check(response.content.count(b'class="wx-area-tab ')==4,who+' has exactly four work areas '+tab)
+     check(b'Process reference, not a candidate completion checklist' in response.content,'capability guide is not a completion claim '+who+'/'+tab)
+     if who=='HR':exports['area-'+area_spec['slug']+'-'+tab]=response.content.decode()
+     if who=='leadership':check(candidate.name.encode() not in response.content,'leadership work area and rail hide candidate identity '+tab)
+   check(c.get(reverse('workspace-area',args=['recruitment']),{'tab':'invalid'}).status_code==404,'invalid work-area tab rejected '+who)
+  for area_spec in AREAS:
+   url=reverse('workspace-area',args=[area_spec['slug']])
+   check(client().get(url).status_code==302,'anonymous work-area access redirects '+area_spec['slug'])
+   check(outsider.get(url).status_code==403,'outsider blocked from work area '+area_spec['slug'])
+   check(a.post(url).status_code==405,'work area is read only '+area_spec['slug'])
+  check(a.get(reverse('workspace-area',args=['invalid'])).status_code==404,'unknown work area rejected')
+  response=a.get(reverse('workspace-area',args=['recruitment']),{'job':job.pk})
+  check(response.content.count(b'wx-card wx-job-card')==1,'vacancy scope retains exactly the selected job card')
+  if otherjob:
+   check(b'wx-card wx-job-card' not in manager.get(reverse('workspace-area',args=['recruitment']),{'job':otherjob.pk}).content,'forged job-card scope cannot expose unassigned vacancy')
+  if otherjob:
+   response=manager.get(reverse('workspace-area',args=['recruitment']),{'tab':'screen','job':otherjob.pk})
+   check(not other or other.name.encode() not in response.content,'forged work-area job scope cannot expose applicant')
+  check(b'Offer approval' in a.get(reverse('workspace-area',args=['offers'])).content and b'Not configured' in a.get(reverse('workspace-area',args=['offers'])).content,'offer approval is explicitly not implemented')
+  check(b'AWFM' in a.get(reverse('workspace-area',args=['joining'])).content,'AWFM and closure gap documented in guide')
+  response=a.get(reverse('workspace-jobs'),{'status':'draft','q':'no-match-'+suffix,'division':'unassigned'})
+  check(response.status_code==200 and b'No jobs match' in response.content,'combined job filters render an empty state')
   check(phase(client(),'screen').status_code==302,'phase requires authentication')
   check(phase(outsider,'screen').status_code==403,'unassigned employee cannot open phases')
   check(phase(a,'invalid').status_code==404,'unknown phase rejected')
@@ -124,7 +152,7 @@ try:
   account=ApplicantAccount.objects.create(email='phase-applicant-'+suffix+'@example.invalid',name='Sam Demo',password='not-a-login-credential')
   ApplicantApplication.objects.create(account=account,candidate=candidate)
   applicant=client();session=applicant.session;session['applicant_account']=account.pk;session.save()
-  r=applicant.get(reverse('applicant-detail',args=[candidate.pk]));check(r.status_code==200,'owned applicant journey renders');exports['applicant']=r.content.decode()
+  r=applicant.get(reverse('applicant-detail',args=[candidate.pk]));check(r.status_code==200,'owned applicant journey renders');exports['applicant']=r.content.decode();exports['applicant-home']=applicant.get(reverse('applicant-home')).content.decode()
   check(b'HR reviewed professional summary' not in r.content and b'profile_review' not in r.content,'private profile review is not disclosed to applicant')
   check(applicant.get(review_url).status_code==302,'applicant identity cannot access staff profile')
   extracted=suggest_from_text('Name: Demo Person\nEmail: demo@example.invalid\nDOB: 1990-01-01\nWork Experience\nCoordinator\nEducation\nDiploma\nSkills\nExcel, Scheduling')

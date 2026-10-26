@@ -48,11 +48,19 @@ def context(request, **values):
     data.update(values)
     from .phase_data import navigation
     data['phase_nav'] = navigation(request, data.get('active',''), data.get('candidate'))
+    from .work_areas import interface_context
+    data.update(interface_context(request, data))
     return data
 
 
 def annotated_jobs(jobs):
-    return jobs.annotate(applications=Count('candidate', filter=Q(candidate__is_active=True), distinct=True), hires=Count('candidate', filter=Q(candidate__is_active=True, candidate__stage_id__stage_type='hired'), distinct=True)).order_by('-created_at')
+    return jobs.select_related('company_id','workspace_profile__division').prefetch_related('recruitment_managers').annotate(
+        applications=Count('candidate',filter=Q(candidate__is_active=True),distinct=True),
+        hires=Count('candidate',filter=Q(candidate__is_active=True,candidate__stage_id__stage_type='hired'),distinct=True),
+        offered_count=Count('candidate',filter=Q(candidate__is_active=True,candidate__offer_letter_status='sent'),distinct=True),
+        accepted_count=Count('candidate',filter=Q(candidate__is_active=True,candidate__offer_letter_status='accepted'),distinct=True),
+        joined_count=Count('candidate',filter=Q(candidate__is_active=True,candidate__offer_letter_status='joined'),distinct=True),
+    ).order_by('-created_at')
 
 
 def enrich_jobs(jobs):
@@ -97,10 +105,16 @@ def today(request):
 @require_http_methods(['GET', 'HEAD'])
 def jobs(request):
     qs = selected_jobs(request, scoped_jobs(request.user))
+    job_id=request.GET.get('job','')
+    if job_id:qs=qs.filter(pk=job_id) if job_id.isdigit() else qs.none()
     query = request.GET.get('q', '').strip()[:100]
     if query:
         qs = qs.filter(Q(title__icontains=query) | Q(open_positions__job_position__icontains=query)).distinct()
-    return render(request, 'experience/jobs.html', context(request, active='jobs', title='Jobs', jobs=enrich_jobs(qs), query=query))
+    status=request.GET.get('status','')
+    if status=='published':qs=qs.filter(is_published=True,closed=False)
+    elif status=='draft':qs=qs.filter(is_published=False,closed=False)
+    elif status=='closed':qs=qs.filter(closed=True)
+    return render(request, 'experience/jobs.html', context(request, active='jobs', title='Jobs', jobs=enrich_jobs(qs), query=query,job_status=status))
 
 
 @workspace
