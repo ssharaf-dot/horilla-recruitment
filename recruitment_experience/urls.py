@@ -1,8 +1,9 @@
 from django.urls import path
 from . import views
-from . import operations, application, phase_views, profile_views
+from . import operations, application, phase_views, profile_views, work_areas
 
 urlpatterns = [
+    path('recruitment/workspace/areas/<slug:slug>/', work_areas.area, name='workspace-area'),
     path('recruitment/workspace/phases/<slug:slug>/', phase_views.phase, name='workspace-phase'),
     path('recruitment/workspace/candidates/<int:pk>/profile/', profile_views.profile_edit, name='workspace-profile-edit'),
     path('recruitment/workspace/', views.today, name='workspace-today'),
