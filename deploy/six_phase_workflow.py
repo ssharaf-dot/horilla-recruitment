@@ -105,7 +105,7 @@ try:
   check(phase(a,'screen',division='not-a-number').status_code==200,'invalid division handled without error')
   rf=RequestFactory().get('/recruitment/workspace/');rf.user=admin
   nav=navigation(rf);scope=phase_scope(rf);all_rows=list(scope['candidates'])
-  check(nav[0]['count']==scope['requisitions'].count()+scope['additional_requests'].count(),'approval navigation counts requisitions and additional openings')
+  check(nav[0]['count']==scope['requisitions'].filter(job__isnull=True).exclude(status='declined').count(),'requisition navigation counts active needs; additional openings remain separate')
   total=sum(item['count'] for item in nav if item['slug'] in ['screen','interview','offer','handover'])+sum(candidate_phase(c)=='closed' for c in all_rows)
   check(total==len(all_rows),'phase counts reconcile every scoped application once')
   for changes,wanted in [({},'screen'),({'stage_id':interview},'interview'),({'stage_id':hired},'offer'),({'offer_letter_status':'sent'},'offer'),({'offer_letter_status':'accepted'},'handover'),({'offer_letter_status':'joined'},'handover'),({'canceled':True},'closed')]:
