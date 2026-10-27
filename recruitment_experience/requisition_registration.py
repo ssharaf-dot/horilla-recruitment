@@ -62,8 +62,8 @@ def registration(request,pk):
             elif request.POST.get('confirm')!='yes':form.add_error(None,'Confirm the approved package and dates before creating the draft vacancy.')
             else:
                 job=form.save(commit=False);job.title=current.title;job.company_id=current.employer;job.vacancy=current.openings;job.description=html.escape(current.jd_text).replace('\n','<br>');job.save();form.save_m2m()
-                for n,(label,kind) in enumerate([('Applied','applied'),('Screening','test'),('Interview','interview'),('Hired','hired'),('Not progressing','cancelled')]):Stage.objects.create(recruitment_id=job,stage=label,stage_type=kind,sequence=n)
-                VacancyProfile.objects.create(job=job,division=current.division,location=current.work_location)
+                for n,(label,kind) in enumerate([('Applied','applied'),('Screening','test'),('Interview','interview'),('Hired','hired'),('Not progressing','cancelled')]):Stage.objects.get_or_create(recruitment_id=job,stage_type=kind,defaults={'stage':label,'sequence':n})
+                VacancyProfile.objects.update_or_create(job=job,defaults={'division':current.division,'location':current.work_location})
                 employee=employee_for(current.ta_owner)
                 if employee:job.recruitment_managers.add(employee)
                 current.job=job;current.registered_at=timezone.now();current.version+=1;current.save();revision(current,request.user,'vacancy_registered')

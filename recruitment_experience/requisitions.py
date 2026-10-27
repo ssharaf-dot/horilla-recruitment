@@ -162,8 +162,9 @@ def detail(request,pk):
     form=AssignmentForm(requisition=item,initial={'expected_version':item.version,'ta_owner':item.ta_owner_id}) if can_assign else None
     revisions=list(item.revisions.select_related('actor').order_by('-pk')[:20])
     differences=[]
-    if len(revisions)>1:
-        before,after=revisions[1].snapshot,revisions[0].snapshot
+    content_versions=[r for r in revisions if r.kind!='vacancy_registered']
+    if len(content_versions)>1:
+        before,after=content_versions[1].snapshot,content_versions[0].snapshot
         labels={'title':'Role title','openings':'Openings','jd_text':'Public JD','kpa_text':'Success measures','salary_min':'Minimum salary','salary_max':'Maximum salary','salary_currency':'Currency','salary_period':'Pay period','salary_basis':'Salary basis','annual_budget':'Annual total budget','grade':'Grade / seniority','department':'Department','work_location':'Location','reason':'Hiring reason','budget_notes':'Budget assumptions'}
         differences=[dict(label=label,before=before.get(key,'') or 'Not supplied',after=after.get(key,'') or 'Not supplied') for key,label in labels.items() if before.get(key)!=after.get(key)]
     return render(request,'experience/requisition_detail.html',page_context(request,title=item.title,item=item,wizard_section=True,hide_action_rail=True,wizard_steps=steps(step_for(item),item),can_edit=editable(request.user,item),can_decide=can_decide,legacy_return=legacy_return,can_assign=can_assign,assignment_form=form,can_register=can_register(request.user,item),events=milestones,audit_events=events,revisions=revisions,differences=differences,package_issues=missing(item),salary_floor=budget_floor(item)))

@@ -104,6 +104,7 @@ class SectionForm(forms.ModelForm):
         allowed=(['title','openings','department','grade','work_location','employment_type','hire_reason','reason','jd_text','jd_reviewed']+BUDGET) if ceo else SECTIONS[section]
         for key in list(self.fields):
             if key not in allowed+['expected_version','creation_token']:del self.fields[key]
+        self.order_fields(allowed+['expected_version','creation_token'])
         for key,field in self.fields.items():
             if key not in ['expected_version']:field.required=False
             if key in OUTLINE or key in KPA:
