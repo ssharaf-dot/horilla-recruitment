@@ -37,7 +37,7 @@ def editable(user, item):
 def can_register(user,item):
     # An explicit Director assignment is required; legacy approved rows are not
     # silently treated as having completed the new assignment workflow.
-    return (item.status=='approved' and item.ta_owner_id is not None and item.assigned_at is not None
+    return (item.status=='approved' and item.approved_version>0 and item.ta_owner_id is not None and item.assigned_at is not None
             and item.ta_owner.is_active and recruiter(item.ta_owner)
             and (user.is_superuser or (recruiter(user) and item.ta_owner_id==user.pk))
             and permitted_requisitions(user).filter(pk=item.pk).exists())
@@ -52,7 +52,7 @@ def steps(selected=1,item=None,counts=None):
     for n,label,owner,detail in STEPS:
         complete=bool(item and ((n==1 and item.submitted_at and item.status not in ['draft','changes']) or (n==2 and item.status=='approved' and item.assigned_at) or (n==3 and item.job_id)))
         result.append(dict(number=n,label=label,owner=owner,detail=detail,current=n==selected,complete=complete,
-            count=(counts or {}).get(n),url=(reverse('workspace-requisition-detail',args=[item.pk])+'#step-'+str(n)) if item else reverse('workspace-area',args=['requisitions'])+'?tab='+{1:'plan',2:'review',3:'registration'}[n]))
+            count=(counts or {}).get(n),url=(reverse('workspace-requisition-detail',args=[item.pk])+('#current-action' if n==step_for(item) else '#step-1' if n==1 else '#step-2' if n==2 else '#registration')) if item else reverse('workspace-area',args=['requisitions'])+'?tab='+{1:'plan',2:'review',3:'registration'}[n] if counts is not None else ''))
     return result
 
 
@@ -61,22 +61,44 @@ def page_context(request,**values):
     return context(request,active='requests',**values)
 
 
+def status_label(item):
+    if item.job_id:return 'Vacancy registered'
+    if item.status=='approved':return 'Ready for vacancy registration' if item.assigned_at and item.ta_owner_id else 'Awaiting recruiter assignment'
+    return {'draft':'Draft','changes':'Changes requested','pending':'Awaiting CEO approval','declined':'Rejected'}.get(item.status,item.status)
+
+
+def next_owner(item):
+    return item.requested_by if item.status in ['draft','changes'] else item.approver if item.status=='pending' else item.assignment_director if item.status=='approved' and not item.ta_owner_id else item.ta_owner
+
+
+def decorate_request(item,user):
+    item.status_label=status_label(item);item.next_owner=name(next_owner(item))
+    item.viewer_acts=(editable(user,item) or (item.status=='pending' and item.approver_id==user.pk and user.has_perm('recruitment_experience.approve_hiringrequest')) or (item.status=='approved' and not item.ta_owner_id and item.assignment_director_id==user.pk and user.has_perm('recruitment_experience.approve_offer')) or (not item.job_id and can_register(user,item)))
+    item.next_action=('Resume draft' if item.status=='draft' else 'Revise request' if item.status=='changes' else 'Review hiring package' if item.status=='pending' else 'Assign recruiter' if not item.ta_owner_id else 'Register vacancy') if item.viewer_acts else 'View request'
+    item.waiting_since=item.assigned_at or item.decided_at or item.submitted_at or item.created_at
+    return item
+
+
 @workspace
 @require_http_methods(['GET','HEAD','POST'])
 def overview(request):
-    # Keep old bookmarks and legacy POSTs safe: the new mandatory JD/KPA checks
-    # apply regardless of whether the wizard or the old requisition URL is used.
     if request.method=='POST':return edit(request)
-    tab=request.GET.get('tab','plan')
-    selected={'plan':1,'review':2,'registration':3}.get(tab)
-    if not selected:raise Http404()
-    rows=list(phase_scope(request)['requisitions'].select_related('division','employer','requested_by','approver','assignment_director','ta_owner','job').order_by('-created_at'))
-    counts={n:sum(step_for(r)==n and r.status!='declined' for r in rows) for n in [1,2,3]}
-    selected_rows=[r for r in rows if step_for(r)==selected and r.status!='declined']
-    for row in selected_rows:
-        row.next_owner=name(row.requested_by if selected==1 else row.approver if row.status=='pending' else row.assignment_director if selected==2 else row.ta_owner)
-        row.next_action='Edit and submit' if selected==1 else 'CEO review' if row.status=='pending' else 'Assign TA owner' if selected==2 else 'Open vacancy' if row.job_id else 'Register vacancy'
-    return render(request,'experience/requisition_overview.html',page_context(request,title='Requisitions & Assignments',wizard_steps=steps(selected,counts=counts),selected_step=selected,step_detail=STEPS[selected-1][3],items=selected_rows,declined=[r for r in rows if r.status=='declined'],can_request=recruiter(request.user) or scoped_jobs(request.user).exists()))
+    scope=phase_scope(request)
+    rows=[decorate_request(r,request.user) for r in scope['requisitions'].select_related('division','employer','requested_by','approver','assignment_director','ta_owner','job').order_by('-created_at')]
+    active=[r for r in rows if not r.job_id and r.status!='declined']
+    counts={n:sum(step_for(r)==n for r in active) for n in [1,2,3]}
+    mine=[r for r in active if r.viewer_acts]
+    default={1:'plan',2:'review',3:'registration'}[step_for(mine[0])] if mine else 'plan'
+    tab=request.GET.get('tab',default);selected={'plan':1,'review':2,'registration':3,'history':0}.get(tab)
+    if selected is None:raise Http404()
+    mode=request.GET.get('queue','all')
+    if mode not in ['all','mine','waiting']:mode='all'
+    selected_rows=[r for r in rows if r.job_id or r.status=='declined'] if selected==0 else [r for r in active if step_for(r)==selected]
+    if mode=='mine':selected_rows=[r for r in selected_rows if r.viewer_acts]
+    if mode=='waiting':selected_rows=[r for r in selected_rows if not r.viewer_acts]
+    query=request.GET.get('q','').strip()[:120]
+    if query:selected_rows=[r for r in selected_rows if query.casefold() in (r.title+' '+str(r.pk)+' '+r.next_owner).casefold()]
+    return render(request,'experience/requisition_overview.html',page_context(request,title='Requisitions & Assignments',wizard_steps=steps(selected,counts=counts),selected_step=selected,step_detail=STEPS[selected-1][3] if selected else 'Completed and rejected requests retain their history.',items=selected_rows,can_request=recruiter(request.user) or scoped_jobs(request.user).exists(),selected_tab=tab,queue_mode=mode,query=query,action_count=sum(r.viewer_acts for r in (active if not selected else [v for v in active if step_for(v)==selected])),waiting_count=sum(not r.viewer_acts for r in (active if not selected else [v for v in active if step_for(v)==selected])),active_count=counts.get(selected,0),history_count=len(rows)-len(active),additional_count=scope['additional_requests'].count()))
 
 
 class RequestForm(forms.ModelForm):
@@ -117,66 +139,55 @@ class RequestForm(forms.ModelForm):
         return values
 
 
-@workspace
-@require_http_methods(['GET','POST'])
 def edit(request,pk=None):
-    item=get_object_or_404(permitted_requisitions(request.user),pk=pk) if pk else None
-    if item and not editable(request.user,item):raise PermissionDenied('Only a draft or returned requisition can be edited. Submitted requirements are locked for review.')
-    if not item and not (recruiter(request.user) or scoped_jobs(request.user).exists()):raise PermissionDenied()
-    form=RequestForm(request.POST or None,request.FILES or None,instance=item,user=request.user,initial={'expected_version':item.version if item else 1})
-    if request.method=='POST' and form.is_valid():
-        submit=request.POST.get('action')=='submit'
-        if submit:
-            for text,file in [('jd_text','jd_document'),('kpa_text','kpa_document')]:
-                if len(form.cleaned_data.get(text,'').strip())<40 and not form.cleaned_data.get(file):form.add_error(text,'Provide a reviewed description (at least 40 characters) or attach a PDF before submission.')
-            for key in ['approver','assignment_director']:
-                if not form.cleaned_data.get(key):form.add_error(key,'Select the next owner before submission.')
-            if not form.cleaned_data['confirm']:form.add_error('confirm','Review and confirm the JD and KPA before submitting.')
-        if not form.errors:
-            with transaction.atomic():
-                current=Requisition.objects.select_for_update().get(pk=item.pk) if item else None
-                if current and (not editable(request.user,current) or current.version!=form.cleaned_data['expected_version']):form.add_error(None,'This requisition changed. Reload its latest version before saving.')
-                else:
-                    value=form.save(commit=False)
-                    if not item:value.requested_by=request.user
-                    value.version=(current.version if current else 0)+1
-                    value.status='pending' if submit else current.status if current else 'draft'
-                    if submit:value.submitted_at=timezone.now();value.decided_at=None;value.decision_note=''
-                    value.save()
-                    record_event(requisition=value,kind='requisition_submitted' if submit else 'requisition_draft',detail='Step 1: reviewed JD and KPA submitted for CEO approval' if submit else 'Step 1: requisition draft saved',metadata={'version':value.version})
-                    messages.success(request,'Step 1 complete. The named CEO approver now reviews the hiring need.' if submit else 'Draft saved. Continue Step 1 when ready; no vacancy has been created.')
-                    return redirect('workspace-requisition-detail',pk=value.pk)
-    return render(request,'experience/requisition_edit.html',page_context(request,title='Step 1 · Raise Requisition',item=item,form=form,wizard_steps=steps(1,item),ai_ready=provider_configured()))
+    from .requisition_wizard import edit as wizard_edit
+    return wizard_edit(request,pk)
 
 
 @workspace
 @require_http_methods(['GET','HEAD'])
 def detail(request,pk):
-    item=get_object_or_404(permitted_requisitions(request.user).select_related('division','employer','requested_by','approver','assignment_director','ta_owner','assigned_by','job'),pk=pk)
+    from .requisition_wizard import missing,budget_floor
+    item=decorate_request(get_object_or_404(permitted_requisitions(request.user).select_related('division','employer','requested_by','approver','assignment_director','ta_owner','assigned_by','job'),pk=pk),request.user)
     item.ceo_name=name(item.approver);item.director_name=name(item.assignment_director);item.ta_name=name(item.ta_owner);item.assigner_name=name(item.assigned_by)
-    events=list(item.activity_events.select_related('actor').order_by('-created_at','-pk')[:60])
-    for event in events:event.display_actor=name(event.actor) if event.actor else event.actor_label or 'System'
+    events=list(item.activity_events.select_related('actor').order_by('-created_at','-pk')[:100])
+    for event in events:
+        event.display_actor=name(event.actor) if event.actor else event.actor_label or 'System'
+        event.display_detail='Requisition created' if event.kind=='created' else event.detail or event.kind
+    milestones=[e for e in events if e.kind not in ['updated','created']]
+    if not milestones:milestones=[e for e in events if e.kind=='created']
     can_decide=item.status=='pending' and item.approver_id==request.user.pk and request.user.has_perm('recruitment_experience.approve_hiringrequest')
-    can_assign=item.status=='approved' and not item.job_id and item.assignment_director_id==request.user.pk and request.user.has_perm('recruitment_experience.approve_offer')
+    legacy_return=item.status=='approved' and not item.approved_version and not item.job_id and item.approver_id==request.user.pk and request.user.has_perm('recruitment_experience.approve_hiringrequest')
+    can_assign=item.status=='approved' and item.approved_version>0 and not item.job_id and item.assignment_director_id==request.user.pk and request.user.has_perm('recruitment_experience.approve_offer')
     form=AssignmentForm(requisition=item,initial={'expected_version':item.version,'ta_owner':item.ta_owner_id}) if can_assign else None
-    return render(request,'experience/requisition_detail.html',page_context(request,title=item.title,item=item,wizard_steps=steps(step_for(item),item),can_edit=editable(request.user,item),can_decide=can_decide,can_assign=can_assign,assignment_form=form,can_register=can_register(request.user,item),events=events))
+    revisions=list(item.revisions.select_related('actor').order_by('-pk')[:20])
+    differences=[]
+    if len(revisions)>1:
+        before,after=revisions[1].snapshot,revisions[0].snapshot
+        labels={'title':'Role title','openings':'Openings','jd_text':'Public JD','kpa_text':'Success measures','salary_min':'Minimum salary','salary_max':'Maximum salary','salary_currency':'Currency','salary_period':'Pay period','salary_basis':'Salary basis','annual_budget':'Annual total budget','grade':'Grade / seniority','department':'Department','work_location':'Location','reason':'Hiring reason','budget_notes':'Budget assumptions'}
+        differences=[dict(label=label,before=before.get(key,'') or 'Not supplied',after=after.get(key,'') or 'Not supplied') for key,label in labels.items() if before.get(key)!=after.get(key)]
+    return render(request,'experience/requisition_detail.html',page_context(request,title=item.title,item=item,wizard_section=True,hide_action_rail=True,wizard_steps=steps(step_for(item),item),can_edit=editable(request.user,item),can_decide=can_decide,legacy_return=legacy_return,can_assign=can_assign,assignment_form=form,can_register=can_register(request.user,item),events=milestones,audit_events=events,revisions=revisions,differences=differences,package_issues=missing(item),salary_floor=budget_floor(item)))
 
 
 @workspace
 @require_http_methods(['POST'])
 def decision(request,pk):
+    from .requisition_wizard import missing,revision
     with transaction.atomic():
         item=get_object_or_404(permitted_requisitions(request.user).select_for_update(),pk=pk)
         if item.approver_id!=request.user.pk or not request.user.has_perm('recruitment_experience.approve_hiringrequest'):raise PermissionDenied()
         action=request.POST.get('decision');note=request.POST.get('note','').strip()[:2000]
-        if item.status!='pending' or str(item.version)!=request.POST.get('expected_version'):messages.error(request,'The request changed. Reload before recording a decision.')
+        legacy_return=item.status=='approved' and not item.approved_version and not item.job_id and action=='changes'
+        if (item.status!='pending' and not legacy_return) or str(item.version)!=request.POST.get('expected_version'):messages.error(request,'The request changed. Reload before recording a decision.')
         elif action not in ['approved','changes','declined'] or request.POST.get('confirm')!='yes':messages.error(request,'Confirm the decision before continuing.')
-        elif action in ['changes','declined'] and not note:messages.error(request,'Explain what must change or why the request is declined.')
-        elif action=='approved' and not ((item.jd_text.strip() or item.jd_document) and (item.kpa_text.strip() or item.kpa_document) and item.assignment_director_id):messages.error(request,'This legacy request needs a JD, KPA and assignment Director. Return it for changes before approval.')
+        elif action in ['changes','declined'] and not note:messages.error(request,'A reason is required so the requester understands this decision.')
+        elif action=='approved' and missing(item):messages.error(request,'This package is incomplete: '+missing(item)[0][1]+' Return it for changes or edit and complete it before approval.')
         else:
-            item.status=action;item.decision_note=note;item.decided_at=timezone.now();item.version+=1;item.save()
-            record_event(requisition=item,kind='requisition_decision',detail='Step 2: CEO '+{'approved':'approved the hiring need','changes':'requested changes','declined':'declined the hiring need'}[action]+(': '+note if note else ''),metadata={'decision':action,'version':item.version})
-            messages.success(request,'CEO decision recorded. '+('The HR Director now assigns a TA owner.' if action=='approved' else 'The requester can revise and resubmit.' if action=='changes' else 'The request remains in history.'))
+            item.status=action;item.decision_note=note;item.decided_at=timezone.now();item.version+=1;item.approved_version=item.version if action=='approved' else 0
+            if action=='changes':item.wizard_step=5;item.resume_section=5
+            item.save();revision(item,request.user,{'approved':'ceo_approved','changes':'ceo_returned','declined':'ceo_rejected'}[action],note)
+            record_event(requisition=item,kind='requisition_decision',detail='CEO '+{'approved':'approved the submitted package','changes':'returned the request for changes','declined':'rejected the hiring need'}[action]+(': '+note if note else ''),metadata={'decision':action,'version':item.version})
+            messages.success(request,'CEO decision recorded. '+('The HR Director now assigns one recruiter.' if action=='approved' else 'The requester can revise and resubmit.' if action=='changes' else 'This request is closed; its reason and history are retained.'))
     return redirect('workspace-requisition-detail',pk=pk)
 
 
@@ -200,7 +211,7 @@ def assign(request,pk):
         if item.assignment_director_id!=request.user.pk or not request.user.has_perm('recruitment_experience.approve_offer'):raise PermissionDenied()
         form=AssignmentForm(request.POST,requisition=item)
         if not form.is_valid():messages.error(request,'Select an active TA with access to this division and confirm the assignment.')
-        elif item.status!='approved' or item.job_id or item.version!=form.cleaned_data['expected_version']:messages.error(request,'CEO approval is required and registered vacancies cannot be reassigned here. Reload the latest request.')
+        elif item.status!='approved' or not item.approved_version or item.job_id or item.version!=form.cleaned_data['expected_version']:messages.error(request,'CEO approval is required and registered vacancies cannot be reassigned here. Reload the latest request.')
         else:
             item.ta_owner=form.cleaned_data['ta_owner'];item.assigned_by=request.user;item.assigned_at=timezone.now();item.version+=1;item.save()
             record_event(requisition=item,kind='requisition_assignment',detail='Step 2 complete: HR Director assigned TA owner '+name(item.ta_owner),metadata={'ta_owner_id':item.ta_owner_id,'version':item.version})
@@ -250,7 +261,7 @@ def ai_draft(request,pk):
                     draft.text=text;draft.model_name=model_name;draft.status='draft';draft.save()
                     record_event(requisition=item,kind='jd_draft',detail='Step 1: AI-assisted JD drafted for human review',metadata={'draft':draft.pk})
                     return redirect('workspace-requisition-jd-review',pk=pk,draft_pk=draft.pk)
-    return render(request,'experience/requisition_jd.html',page_context(request,title='Step 1 · Draft a JD',item=item,form=form,ai_ready=ready,wizard_steps=steps(1,item)))
+    return render(request,'experience/requisition_jd.html',page_context(request,title='Step 1B · Draft a JD',item=item,wizard_section=True,hide_action_rail=True,form=form,ai_ready=ready,wizard_steps=steps(1,item),**jd_nav(item)))
 
 
 @workspace
@@ -270,8 +281,13 @@ def ai_review(request,pk,draft_pk):
             saved=JDDraft.objects.select_for_update().get(pk=draft_pk)
             if not editable(request.user,current) or current.version!=form.cleaned_data['expected_version'] or saved.status!='draft' or digest(current.jd_text)!=saved.source_description_sha256:form.add_error(None,'The request or draft changed. Reload before saving.')
             else:
-                current.jd_text=form.cleaned_data['text'];current.version+=1;current.save()
+                current.jd_text=form.cleaned_data['text'];current.jd_reviewed=True;current.version+=1;current.save()
                 saved.text=current.jd_text;saved.status='applied';saved.applied_at=timezone.now();saved.version+=1;saved.save()
                 record_event(requisition=current,kind='jd_applied',detail='Step 1: human reviewed and saved the AI-assisted JD',metadata={'draft':saved.pk})
-                return redirect('workspace-requisition-edit',pk=pk)
-    return render(request,'experience/requisition_jd.html',page_context(request,title='Step 1 · Review JD draft',item=item,form=form,review=True,wizard_steps=steps(1,item)))
+                return redirect(reverse('workspace-requisition-edit',args=[pk])+'?section=2')
+    return render(request,'experience/requisition_jd.html',page_context(request,title='Step 1B · Review JD draft',item=item,wizard_section=True,hide_action_rail=True,form=form,review=True,wizard_steps=steps(1,item),**jd_nav(item)))
+
+
+def jd_nav(item):
+    from .requisition_wizard import SUBSTEPS
+    return dict(section=2,substeps=[dict(number=i,label=label,url=reverse('workspace-requisition-edit',args=[item.pk])+'?section='+str(i),current=i==2,available=i<=item.wizard_step) for i,(label,_) in enumerate(SUBSTEPS,1)])

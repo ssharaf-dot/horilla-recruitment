@@ -38,7 +38,7 @@ def permitted_requisitions(user):
         divisions = Division.objects.filter(is_active=True)
         if DivisionAccess.objects.filter(user=user).exists():
             divisions = divisions.filter(divisionaccess__user=user).distinct()
-        return Requisition.objects.filter(division__in=divisions)
+        return Requisition.objects.filter(Q(division__in=divisions)|Q(requested_by=user,division__isnull=True))
     return Requisition.objects.filter(Q(requested_by=user) | Q(approver=user) | Q(assignment_director=user) | Q(ta_owner=user))
 
 
@@ -73,7 +73,7 @@ def navigation(request, active='', candidate=None):
     if cached is None or cached[0] != key:
         scope = phase_scope(request)
         counts = Counter(candidate_phase(c) for c in scope['candidates'])
-        counts['plan'] = scope['requisitions'].count() + scope['additional_requests'].count()
+        counts['plan'] = scope['requisitions'].exclude(status='declined').filter(job__isnull=True).count()
         counts['attract'] = scope['jobs'].count()
         request._phase_navigation = (key, counts)
     else:

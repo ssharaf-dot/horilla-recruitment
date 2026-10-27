@@ -282,6 +282,9 @@ def requisition_decide(request, pk):
 @require_http_methods(['GET','POST'])
 def vacancy_form(request,pk=None):
     require_hr(request)
+    if pk is None and request.GET.get('requisition','').isdigit():
+        from .requisition_registration import registration
+        return registration(request,int(request.GET['requisition']))
     job=get_object_or_404(scoped_jobs(request.user),pk=pk) if pk else None
     requisition=None
     if not job and request.GET.get('requisition','').isdigit():

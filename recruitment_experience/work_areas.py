@@ -54,7 +54,7 @@ def interface_context(request, data):
     }
     scope=phase_scope(request)
     assigned=scope['requisitions'].filter(Q(approver=request.user,status='pending') | Q(assignment_director=request.user,status='approved',ta_owner__isnull=True) | Q(ta_owner=request.user,status='approved',job__isnull=True)).count()
-    action_tab='registration' if recruiter(request.user) else 'review'
+    action_tab='review' if scope['requisitions'].filter(Q(approver=request.user,status='pending')|Q(assignment_director=request.user,status='approved',ta_owner__isnull=True)).exists() else 'registration'
     area=BY_AREA.get(active)
     current_tab=getattr(request,'_workspace_tab',None) or data.get('phase_slug') or {'jobs':'jobs','candidates':'screen','interviews':'interview','requests':'plan'}.get(data.get('active'))
     lower,upper={'requisitions':(1,3),'recruitment':(4,8),'offers':(9,10),'joining':(11,14)}.get(active,(0,0))
@@ -79,7 +79,7 @@ def area(request,slug):
     if slug not in BY_AREA: raise Http404()
     spec=BY_AREA[slug]
     tab=request.GET.get('tab',spec['tabs'][0][0])
-    if tab not in [t[0] for t in spec['tabs']]: raise Http404()
+    if tab not in [t[0] for t in spec['tabs']] and not (slug=='requisitions' and tab=='history'): raise Http404()
     request._workspace_area=slug;request._workspace_tab=tab
     from . import views,phase_views
     if slug=='requisitions':
