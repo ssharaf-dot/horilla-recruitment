@@ -1,8 +1,20 @@
 from django.urls import path
 from . import views
-from . import operations, application, phase_views, profile_views, work_areas
+from . import operations, application, phase_views, profile_views, work_areas, workflow, jd
 
 urlpatterns = [
+    path('recruitment/workspace/settings/demo-director/', workflow.director_demo_setup, name='workspace-director-demo'),
+    path('recruitment/workspace/settings/ai/', jd.provider_settings, name='workspace-jd-settings'),
+    path('recruitment/workspace/offer-approvals/', workflow.approvals, name='workspace-offer-approvals'),
+    path('recruitment/workspace/offer-approvals/<int:pk>/', workflow.approval_detail, name='workspace-offer-approval'),
+    path('recruitment/workspace/candidates/<int:pk>/offer-approval/', workflow.prepare_offer, name='workspace-prepare-offer'),
+    path('recruitment/workspace/candidates/<int:pk>/joining/', workflow.joining, name='workspace-joining'),
+    path('recruitment/workspace/candidates/<int:pk>/joining/details/', workflow.joining_details, name='workspace-joining-details'),
+    path('recruitment/workspace/joining-tasks/<int:pk>/', workflow.joining_task, name='workspace-joining-task'),
+    path('recruitment/workspace/jobs/<int:pk>/activity/', workflow.tracker, name='workspace-job-tracker'),
+    path('recruitment/workspace/candidates/<int:candidate_pk>/activity/', workflow.tracker, name='workspace-candidate-tracker'),
+    path('recruitment/workspace/jobs/<int:pk>/jd/', jd.drafting, name='workspace-jd'),
+    path('recruitment/workspace/jd-drafts/<int:pk>/', jd.review, name='workspace-jd-review'),
     path('recruitment/workspace/areas/<slug:slug>/', work_areas.area, name='workspace-area'),
     path('recruitment/workspace/phases/<slug:slug>/', phase_views.phase, name='workspace-phase'),
     path('recruitment/workspace/candidates/<int:pk>/profile/', profile_views.profile_edit, name='workspace-profile-edit'),

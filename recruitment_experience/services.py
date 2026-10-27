@@ -66,7 +66,8 @@ def decorate_interview(appointment):
 
 
 def audit(candidate, user, kind, detail='', **metadata):
-    return WorkflowEvent.objects.create(candidate=candidate, actor=user if getattr(user, 'is_authenticated', False) else None, kind=kind, detail=detail, metadata=metadata)
+    from .activity import record_event
+    return record_event(candidate=candidate, actor=user if getattr(user, 'is_authenticated', False) else None, kind=kind, detail=detail, metadata=metadata)
 
 
 def notify(key, recipient, subject, body):

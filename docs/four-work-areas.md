@@ -20,3 +20,8 @@ Applicant accounts retain their private applications and use a refreshed account
 ## Validation and release
 
 Run `deploy/six_phase_workflow.py` on **horilla_staging only**. It now tests the four-area routes, navigation, forged filters, role boundaries, read-only methods, capability labels and existing CV/profile flows, rolling back synthetic data. Also run the existing experience workflow, portal branding and recruitment boundary checks. Review desktop and phone rendering before publishing. Production checks use existing records only and must preserve record/media hashes, accounts, environment values, mounts, public ports and the existing database container. Keep a fresh restore-verified backup and the previous application image.
+
+
+## Workflow controls release
+
+Director offer approval, joining checklists, the activity tracker and Claude API configuration are documented in [workflow-controls.md](workflow-controls.md). That release supersedes the initial capability gaps for these features; external offer delivery, calendar delivery, automatic HRMS transfer, AWFM reconciliation and salary market estimates remain deferred.
