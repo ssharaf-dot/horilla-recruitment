@@ -112,7 +112,7 @@ def context(request):
 def dashboard_accessible(user):
     # Match the existing dashboard's permission-or-manager rule. Its denial
     # script sends users back to '/', so reject here to avoid a landing loop.
-    if user.has_perm("recruitment.view_recruitment") or user.has_perm("recruitment_experience.view_hiringoverview"):
+    if user.has_perm("recruitment.view_recruitment") or user.has_perm("recruitment_experience.view_hiringoverview") or user.has_perm("recruitment_experience.approve_offer"):
         return True
     from django.apps import apps
     if apps.is_installed('recruitment_experience'):
@@ -205,6 +205,19 @@ class RecruitmentOnlyMiddleware(MiddlewareMixin):
             return HttpResponseForbidden(
                 _("This module is unavailable in recruitment-only mode.")
             )
+        # All recruitment writes in the recruitment-only demo use the scoped,
+        # audited workspace. Legacy bulk/inline handlers bypass model signals and
+        # offer gates, so keep them read-only, including for administrators.
+        route_name = request.resolver_match.url_name or ''
+        if (request.user.is_authenticated and request.path_info.startswith('/recruitment/')
+            and request.method not in {'GET','HEAD','OPTIONS'}
+            and not route_name.startswith('workspace-')
+            and route_name not in {'candidate-survey'}):
+            return HttpResponseForbidden(_('Use the recruitment workspace to make an audited change.'))
+        if route_name in {'generic-delete','history-revert'} and request.method not in {'GET','HEAD','OPTIONS'} and request.GET.get('model','').lower().startswith('recruitment.'):
+            from django.apps import apps
+            if apps.is_installed('recruitment_experience'):
+                return HttpResponseForbidden(_('Use the recruitment workspace to preserve approval and activity history.'))
         # Division-scoped HR must not escape workspace scoping through legacy routes,
         # generic helpers or legacy media. Superusers retain protected administration.
         from django.apps import apps
