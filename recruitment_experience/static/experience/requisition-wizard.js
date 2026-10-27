@@ -23,15 +23,15 @@
     if(button&&button.name)data.append(button.name,button.value);
     buttons.forEach(function(b){b.disabled=true;});
     try{
-      var response=await fetch(form.action||window.location.href,{method:'POST',body:data,credentials:'same-origin',cache:'no-store'});
+      var response=await fetch(form.getAttribute('action')||window.location.href,{method:'POST',body:data,credentials:'same-origin',cache:'no-store'});
       if(response.redirected){
         var destination=new URL(response.url);
         if(destination.pathname.includes('/login')){announce('Your session expired. Keep this page open, sign in in another tab, then retry. Your unsaved entries remain here.');return;}
         dirty=false;window.location.assign(response.url);return;
       }
       if(!response.ok){announce('The server could not confirm this save. Your entries remain here. Retry once; if this was a new draft, the same request will be reused rather than duplicated.');return;}
-      var parsed=new DOMParser().parseFromString(await response.text(),'text/html'),errors=parsed.getElementById('request-errors');
-      if(errors){var current=document.getElementById('request-errors');if(current)current.remove();errors.tabIndex=-1;form.prepend(document.importNode(errors,true));form.querySelector('#request-errors').focus();}
+      var parsed=new DOMParser().parseFromString(await response.text(),'text/html'),errors=parsed.getElementById('request-errors')||parsed.querySelector('[data-requisition-form] [role=alert]')||parsed.querySelector('[data-requisition-form] .errorlist');
+      if(errors){errors.id='request-errors';var current=document.getElementById('request-errors');if(current)current.remove();errors.tabIndex=-1;form.prepend(document.importNode(errors,true));form.querySelector('#request-errors').focus();}
       else announce('The save was not confirmed. Your entries remain here; review the form before retrying.');
     }catch(error){announce('Connection interrupted. Your entries remain here. Check your connection and retry. If the save already completed, the system will show the saved request or explain that a newer version exists.');}
     finally{submitting=false;buttons.forEach(function(b){b.disabled=false;});if(status)status.textContent='Not saved · check the message above';}
