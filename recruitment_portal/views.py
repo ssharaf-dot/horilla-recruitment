@@ -121,6 +121,9 @@ def overview(request):
     from recruitment_experience.access import recruiter, leadership
     if recruiter(request.user):
         return today(request)
+    if request.user.has_perm('recruitment_experience.approve_offer'):
+        from recruitment_experience.workflow import approvals
+        return approvals(request)
     if leadership(request.user):
         return ceo(request)
     return manager(request)
