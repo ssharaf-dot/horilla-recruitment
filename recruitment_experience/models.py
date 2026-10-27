@@ -160,12 +160,23 @@ class Requisition(models.Model):
     openings = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(100)])
     reason = models.TextField(max_length=4000)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='workspace_requisitions')
-    approver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='assigned_requisitions')
-    status = models.CharField(max_length=12, default='pending', choices=[('pending', 'Awaiting approval'), ('approved', 'Approved'), ('declined', 'Declined')])
+    approver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='assigned_requisitions')
+    status = models.CharField(max_length=12, default='draft', choices=[('draft', 'Draft'), ('changes', 'Changes requested'), ('pending', 'Awaiting CEO approval'), ('approved', 'CEO approved'), ('declined', 'Declined')])
     decision_note = models.TextField(max_length=2000, blank=True)
     decided_at = models.DateTimeField(null=True, blank=True)
     job = models.OneToOneField('recruitment.Recruitment', on_delete=models.PROTECT, null=True, blank=True, related_name='workspace_requisition')
     created_at = models.DateTimeField(auto_now_add=True)
+    jd_text = models.TextField(max_length=16000, blank=True)
+    kpa_text = models.TextField(max_length=8000, blank=True)
+    jd_document = models.FileField(upload_to='requisition_documents/', blank=True)
+    kpa_document = models.FileField(upload_to='requisition_documents/', blank=True)
+    assignment_director = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='requisitions_to_assign')
+    ta_owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='owned_requisitions')
+    assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='ta_assignments_made')
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    registered_at = models.DateTimeField(null=True, blank=True)
+    version = models.PositiveIntegerField(default=1)
 
 
 class CandidateProfile(models.Model):
@@ -241,7 +252,8 @@ class JoiningTask(models.Model):
 
 
 class JDDraft(models.Model):
-    job = models.ForeignKey('recruitment.Recruitment', on_delete=models.PROTECT, related_name='jd_drafts')
+    job = models.ForeignKey('recruitment.Recruitment', on_delete=models.PROTECT, null=True, blank=True, related_name='jd_drafts')
+    requisition = models.ForeignKey(Requisition, on_delete=models.PROTECT, null=True, blank=True, related_name='jd_drafts')
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     brief = models.TextField(max_length=6000)
     text = models.TextField(max_length=16000, blank=True)
@@ -252,6 +264,9 @@ class JDDraft(models.Model):
     version = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     applied_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(check=(models.Q(job__isnull=False, requisition__isnull=True) | models.Q(job__isnull=True, requisition__isnull=False)), name='workspace_jd_one_parent')]
 
 
 class JDProviderConfig(models.Model):

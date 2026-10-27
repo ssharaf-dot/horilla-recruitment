@@ -54,7 +54,7 @@ FIELDS = {
     'recruitment.interviewschedule': ['interview_date','interview_time','completed','description'],
     'recruitment.stagenote': ['description','candidate_can_view'],
     'recruitment_experience.candidateprofile': ['headline','about','experience','education','skills'],
-    'recruitment_experience.requisition': ['status','approver_id','job_id','openings'],
+    'recruitment_experience.requisition': ['status','approver_id','job_id','openings','title','division_id','employer_id','jd_text','kpa_text','jd_document','kpa_document','assignment_director_id','ta_owner_id'],
     'recruitment_experience.hiringrequest': ['status','openings','decided_by_id','decision_note'],
     'recruitment_experience.vacancyprofile': ['division_id','location','work_type'],
     'recruitment_experience.interviewfeedback': ['recommendation','technical','communication','evidence'],

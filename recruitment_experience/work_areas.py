@@ -1,6 +1,7 @@
 """Four read-only work areas over the existing authorized recruitment workflows."""
 from urllib.parse import urlencode
 from django.http import Http404
+from django.db.models import Q
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 from .access import recruiter, scoped_interviews
@@ -8,7 +9,7 @@ from .phase_data import candidate_phase, phase_scope
 from .services import decorate_interview
 
 AREAS = [
-    dict(slug='requisitions', number=1, label='Requisitions & assignment', short='Requisitions', steps='01–03', icon='briefcase', purpose='Agree the hiring need, review the request and prepare the vacancy.', tabs=[('plan','Requests & approvals'),('registration','Vacancy registration')]),
+    dict(slug='requisitions', number=1, label='Requisitions & Assignments', short='Requisitions', steps='01–03', icon='briefcase', purpose='Agree the hiring need, review the request and prepare the vacancy.', tabs=[('plan','Step 1 · Raise Requisition'),('review','Step 2 · Approve & Assign'),('registration','Step 3 · Register Vacancy')]),
     dict(slug='recruitment', number=2, label='Sourcing & selection', short='Recruitment', steps='04–08', icon='people', purpose='Manage vacancies, review CVs and coordinate interviews in one workspace.', tabs=[('jobs','My jobs'),('screen','CVs & screening'),('interview','Interviews & selection')]),
     dict(slug='offers', number=3, label='Offers & acceptance', short='Offers', steps='09–10', icon='document', purpose='Review the offer process and record confirmed candidate responses.', tabs=[('offer','Offer progress'),('approvals','Director approvals')]),
     dict(slug='joining', number=4, label='Joining & closure', short='Joining', steps='11–14', icon='check', purpose='Follow accepted candidates through actual joining and the receiving HR team.', tabs=[('handover','Joining board')]),
@@ -16,9 +17,9 @@ AREAS = [
 BY_AREA = {a['slug']: a for a in AREAS}
 PHASE_AREA = dict(plan='requisitions', attract='recruitment', screen='recruitment', interview='recruitment', offer='offers', handover='joining')
 STEPS = [
-    (1,'Manpower requisition','Stakeholder','Available','Submit a hiring request. HRMS intake is not connected.'),
-    (2,'HR Director review & assignment','HR Director','Partial','Named-approver decisions are available. Automatic Director routing and TA assignment are not configured.'),
-    (3,'Vacancy registration','Assigned TA / HR','Partial','Prepare an approved vacancy and hiring team. Budget, target closure and AWFM registration need further implementation.'),
+    (1,'Raise Requisition','Hiring manager / HR','Available','Draft the hiring need, attach or write the JD and KPA, review and submit to the named CEO approver. Returned requests stay editable.'),
+    (2,'CEO Approval & TA Assignment','CEO → HR Director','Available','The assigned CEO approves or requests changes. Only then can the assigned HR Director assign one TA owner. Offer approval is a separate workflow.'),
+    (3,'Register Vacancy','Assigned TA','Partial','Register the approved need and JD as a draft vacancy, then continue to Sourcing & Selection. AWFM integration remains unconnected.'),
     (4,'Sourcing & candidate logging','Assigned TA','Partial','Applications and source are recorded. Prospect contacts and repeat call attempts are not yet tracked.'),
     (5,'CV submission','Assigned TA','Partial','Request a manager review from the candidate profile. Formal CV submission batches are not configured.'),
     (6,'CV screening','Stakeholder / HR','Available','Managers recommend; HR confirms stage changes and rejections.'),
@@ -52,7 +53,8 @@ def interface_context(request, data):
         'joining':f"{counts.get('handover',0)} joiners",
     }
     scope=phase_scope(request)
-    assigned=scope['requisitions'].filter(approver=request.user,status='pending').count()
+    assigned=scope['requisitions'].filter(Q(approver=request.user,status='pending') | Q(assignment_director=request.user,status='approved',ta_owner__isnull=True) | Q(ta_owner=request.user,status='approved',job__isnull=True)).count()
+    action_tab='registration' if recruiter(request.user) else 'review'
     area=BY_AREA.get(active)
     current_tab=getattr(request,'_workspace_tab',None) or data.get('phase_slug') or {'jobs':'jobs','candidates':'screen','interviews':'interview','requests':'plan'}.get(data.get('active'))
     lower,upper={'requisitions':(1,3),'recruitment':(4,8),'offers':(9,10),'joining':(11,14)}.get(active,(0,0))
@@ -66,7 +68,7 @@ def interface_context(request, data):
         area_nav=[dict(a,url=area_url(a['slug'],request),current=active==a['slug'],descriptor=descriptors[a['slug']]) for a in AREAS],
         work_area=area, area_steps=step_rows,
         work_tabs=[dict(label=label,url=area_url(active,request,tab),current=tab==current_tab) for tab,label in area['tabs'] if tab!='approvals' or recruiter(request.user) or request.user.has_perm('recruitment_experience.approve_offer')] if area else [],
-        assigned_approvals=assigned,rail_interviews=rail,rail_aggregate=scope['aggregate'],
+        assigned_approvals=assigned,requisition_action_url=area_url('requisitions',request,action_tab),rail_interviews=rail,rail_aggregate=scope['aggregate'],
         show_work_area_heading=bool(area and (data.get('phase_slug') or getattr(request,'_workspace_area',None))),
     )
 
@@ -80,6 +82,9 @@ def area(request,slug):
     if tab not in [t[0] for t in spec['tabs']]: raise Http404()
     request._workspace_area=slug;request._workspace_tab=tab
     from . import views,phase_views
+    if slug=='requisitions':
+        from .requisitions import overview
+        return overview(request)
     if tab=='approvals':
         from .workflow import approvals
         return approvals(request)

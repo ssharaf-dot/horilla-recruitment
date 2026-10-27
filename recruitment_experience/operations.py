@@ -268,47 +268,14 @@ def applicant_action(request,pk,action):
     return render(request,'experience/applicant_action.html',{'candidate':record,'form':form,'action':action})
 
 
-@workspace
-@require_http_methods(['GET','POST'])
 def requisitions(request):
-    permitted=allowed_divisions(request.user)
-    class RequestForm(forms.ModelForm):
-        class Meta:
-            model=Requisition
-            fields=['title','division','employer','openings','reason','approver']
-            widgets={'reason':forms.Textarea(attrs={'rows':4})}
-    form=RequestForm(request.POST or None)
-    form.fields['division'].queryset=permitted
-    form.fields['approver'].queryset=User.objects.filter(is_active=True).filter(Q(is_superuser=True)|Q(user_permissions__codename='approve_hiringrequest')|Q(groups__permissions__codename='approve_hiringrequest')).exclude(pk=request.user.pk).distinct()
-    if request.method=='POST':
-        if not recruiter(request.user) and not scoped_jobs(request.user).exists():
-            raise PermissionDenied()
-        if form.is_valid():
-            item=form.save(commit=False);item.requested_by=request.user;item.save()
-            notify('requisition:'+str(item.pk),item.approver.email,'A hiring requisition needs your review',task_message(reverse('workspace-requisitions'),'Review the hiring need in your recruitment workspace.'))
-            messages.success(request,'Requisition submitted. It has not created or published a vacancy.')
-            return redirect('workspace-requisitions')
-    items=Requisition.objects.filter(Q(requested_by=request.user)|Q(approver=request.user))
-    if request.user.is_superuser:
-        items=Requisition.objects.all()
-    elif recruiter(request.user):
-        items=Requisition.objects.filter(division__in=permitted)
-    return render(request,'experience/requisitions.html',context(request,active='requests',title='Hiring requisitions',form=form,items=items.select_related('division','employer','requested_by','approver','job').order_by('-created_at')))
+    from .requisitions import overview
+    return overview(request)
 
 
-@workspace
-@require_http_methods(['POST'])
-def requisition_decide(request,pk):
-    with transaction.atomic():
-        item=get_object_or_404(Requisition.objects.select_for_update(),pk=pk)
-        if item.approver_id!=request.user.pk or not request.user.has_perm('recruitment_experience.approve_hiringrequest'):
-            raise PermissionDenied()
-        if item.status!='pending':
-            messages.error(request,'This requisition already has a decision.')
-        elif request.POST.get('decision') in ['approved','declined'] and request.POST.get('confirm')=='yes':
-            item.status=request.POST['decision'];item.decision_note=request.POST.get('note','')[:2000];item.decided_at=timezone.now();item.save()
-            messages.success(request,'Decision recorded. HR must prepare the vacancy before publication.')
-    return redirect('workspace-requisitions')
+def requisition_decide(request, pk):
+    from .requisitions import decision
+    return decision(request, pk)
 
 
 @workspace
@@ -319,6 +286,9 @@ def vacancy_form(request,pk=None):
     requisition=None
     if not job and request.GET.get('requisition','').isdigit():
         requisition=get_object_or_404(Requisition,status='approved',pk=request.GET['requisition'],division__in=allowed_divisions(request.user))
+        from .requisitions import can_register
+        if not can_register(request.user,requisition):
+            raise PermissionDenied('The CEO must approve and the HR Director must assign a TA before registration.')
         if requisition.job_id:
             return redirect('workspace-job',pk=requisition.job_id)
     class VacancyForm(forms.ModelForm):
@@ -326,9 +296,13 @@ def vacancy_form(request,pk=None):
             model=Recruitment
             fields=['title','company_id','open_positions','vacancy','description','start_date','end_date','optional_resume','closed']
             widgets={'description':forms.Textarea(attrs={'rows':7}),'start_date':forms.DateInput(attrs={'type':'date'}),'end_date':forms.DateInput(attrs={'type':'date'})}
-    form=VacancyForm(request.POST or None,instance=job,initial={'title':requisition.title,'company_id':requisition.employer_id,'vacancy':requisition.openings} if requisition else None)
+    form=VacancyForm(request.POST or None,instance=job,initial={'title':requisition.title,'company_id':requisition.employer_id,'vacancy':requisition.openings,'description':__import__('html').escape(requisition.jd_text).replace('\n','<br>')} if requisition else None)
     if job or requisition:
         form.fields['company_id'].disabled=True
+        if requisition:
+            form.fields['description'].disabled=bool(requisition.jd_text)
+            form.fields['description'].help_text='Approved Step 1 JD. If it was uploaded as a PDF, review the requisition document and enter a public description after registration.'
+            form.fields['title'].disabled=True
     else:
         form.fields['company_id'].queryset=Company.objects.filter(pk__in=scoped_jobs(request.user).values('company_id')) if not request.user.is_superuser else Company.objects.all()
     if request.method=='POST' and form.is_valid():
@@ -336,7 +310,7 @@ def vacancy_form(request,pk=None):
             form.add_error(None,'Start with an approved hiring requisition, then select Prepare approved vacancy. Existing vacancies can be edited directly.')
         else:
             return save_vacancy(request,form,job,requisition)
-    return render(request,'experience/form.html',context(request,active='jobs',title='Edit vacancy' if job else 'Prepare a vacancy',intro='For a new vacancy, open Hiring requisitions and prepare an approved request. The employer on an existing vacancy is preserved.',form=form,submit_label='Save vacancy',cancel_url=reverse('workspace-requisitions') if not job else reverse('workspace-jobs')))
+    return render(request,'experience/form.html',context(request,active='jobs',title='Edit vacancy' if job else 'Prepare a vacancy',intro='Step 3 · Register the approved hiring need. Its legal employer, openings and JD carry forward. Saving creates a draft; publishing happens in Sourcing & Selection.',form=form,submit_label='Save vacancy',cancel_url=reverse('workspace-requisitions') if not job else reverse('workspace-jobs')))
 
 
 def save_vacancy(request,form,job,requisition):
@@ -348,6 +322,11 @@ def save_vacancy(request,form,job,requisition):
                 requisition=Requisition.objects.select_for_update().get(pk=requisition.pk)
                 if requisition.job_id:
                     return redirect('workspace-job',pk=requisition.job_id)
+                from .requisitions import can_register
+                if not can_register(request.user,requisition):
+                    raise PermissionDenied('Requisition approval or TA assignment changed. Reload before registration.')
+                value.title=requisition.title
+                if requisition.jd_text:value.description=__import__('html').escape(requisition.jd_text).replace('\n','<br>')
                 value.company_id=requisition.employer;value.vacancy=requisition.openings
             value.save();form.save_m2m()
             if not job:
@@ -355,7 +334,11 @@ def save_vacancy(request,form,job,requisition):
                     Stage.objects.get_or_create(recruitment_id=value,stage_type=kind,defaults={'stage':label,'sequence':sequence})
             if requisition:
                 VacancyProfile.objects.create(job=value,division=requisition.division)
-                requisition.job=value;requisition.save()
+                requisition.job=value;requisition.registered_at=timezone.now();requisition.version+=1;requisition.save()
+                employee=employee_for(requisition.ta_owner)
+                if employee:value.recruitment_managers.add(employee)
+                from .activity import record_event
+                record_event(requisition=requisition,job=value,kind='requisition_registered',detail='Step 3 completed: approved requisition registered as a draft vacancy')
         messages.success(request,'Vacancy saved. New vacancies remain drafts until HR reviews and publishes them.')
         return redirect('workspace-job',pk=value.pk)
 

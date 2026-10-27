@@ -105,6 +105,9 @@ def workflow_overview(request):
 @require_http_methods(['GET','HEAD'])
 def phase(request,slug):
     if slug not in BY_SLUG:raise Http404()
+    if slug=='plan':
+        from .requisitions import overview
+        return overview(request)
     spec=BY_SLUG[slug];scope=phase_scope(request);columns=[]
     if slug=='plan':
         columns=[column('Awaiting approval','The named approver reviews the staffing need.',1),column('Approved · prepare vacancy','HR prepares an approved request as a draft vacancy.',2),column('Vacancy / openings prepared','Continue with the approved vacancy or updated openings.',3),column('Declined','Keep the decision and reason for reference.','closed')]

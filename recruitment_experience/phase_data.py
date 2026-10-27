@@ -39,7 +39,7 @@ def permitted_requisitions(user):
         if DivisionAccess.objects.filter(user=user).exists():
             divisions = divisions.filter(divisionaccess__user=user).distinct()
         return Requisition.objects.filter(division__in=divisions)
-    return Requisition.objects.filter(Q(requested_by=user) | Q(approver=user))
+    return Requisition.objects.filter(Q(requested_by=user) | Q(approver=user) | Q(assignment_director=user) | Q(ta_owner=user))
 
 
 def phase_scope(request):
