@@ -131,6 +131,7 @@ try:
   ta.post(vacancy+'&section=review',dict(expected_version=req.version,confirm='yes'));check(Recruitment.objects.count()==count+1,'repeated create cannot duplicate vacancy')
   check(req.job.recruitment_managers.filter(pk=people['ta'].employee_get.pk).exists(),'assigned TA attached to vacancy team')
   exports['wizard-complete']=ta.get(detail).content.decode()
+  check('Before' in exports['wizard-complete'] and body in submitted.snapshot['jd_text'],'registration does not obscure earlier CEO package comparison')
   check(req.activity_events.filter(kind='requisition_decision').count()==2 and req.activity_events.filter(kind='requisition_assignment').exists(),'rework approval assignment and registration history retained')
   check(not any(body in str(e.metadata) or '380000' in str(e.metadata) for e in req.activity_events.all()),'JD and salary bodies excluded from generic event metadata')
   # Distinct edited-return and terminal rejection paths use isolated copies.
