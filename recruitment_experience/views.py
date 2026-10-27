@@ -34,7 +34,7 @@ def workspace(view):
     @wraps(view)
     def wrapped(request, *args, **kwargs):
         enabled()
-        if not (recruiter(request.user) or scoped_jobs(request.user).exists() or leadership(request.user)):
+        if not (recruiter(request.user) or scoped_jobs(request.user).exists() or leadership(request.user) or request.user.has_perm('recruitment_experience.approve_offer')):
             raise PermissionDenied('Ask your administrator for access to recruitment.')
         with timezone.override(WORKING_ZONE):
             response = view(request, *args, **kwargs)
@@ -45,6 +45,7 @@ def workspace(view):
 
 def context(request, **values):
     data = dict(divisions=Division.objects.filter(is_active=True).filter(pk__in=DivisionAccess.objects.filter(user=request.user).values('division_id')) if not request.user.is_superuser and DivisionAccess.objects.filter(user=request.user).exists() else Division.objects.filter(is_active=True), selected_division=request.GET.get('division', ''), can_hr=recruiter(request.user), can_hire=recruiter(request.user) or scoped_jobs(request.user).exists(), can_lead=leadership(request.user), can_approve=request.user.has_perm('recruitment_experience.approve_hiringrequest'), can_create=request.user.has_perm('recruitment.add_recruitment'))
+    data['can_director'] = request.user.has_perm('recruitment_experience.approve_offer')
     data.update(values)
     from .phase_data import navigation
     data['phase_nav'] = navigation(request, data.get('active',''), data.get('candidate'))
@@ -192,7 +193,7 @@ def candidate(request, pk):
     import re
     skill_tags = [tag.strip() for tag in re.split(r'[,;\n]', profile.skills) if tag.strip()][:40] if profile else []
     from .phase_data import candidate_phase
-    return render(request, 'experience/candidate.html', context(request, profile=profile, skill_tags=skill_tags, candidate_phase=candidate_phase(record), portfolio_url=record.portfolio if record.portfolio.startswith(('https://','http://')) else '', active='candidates', title=record.name, candidate=record, note_form=note, can_coordinate=can_coordinate(request.user, record), stages=record.recruitment_id.stage_set.filter(is_active=True).exclude(stage_type__in=['hired','cancelled']).order_by('sequence'), attachments=[(key, next((q['question'] for q in draft.questions if key=='q'+str(q['id'])), 'Screening attachment')) for draft in ApplicationDraft.objects.filter(candidate=record) for key in draft.attachments if key!='profile'], all_stages=record.recruitment_id.stage_set.filter(is_active=True).order_by('sequence'), events=record.workspace_events.select_related('actor')[:30], review_form=ReviewDecisionForm(), notes=StageNote.objects.filter(candidate_id=record).select_related('updated_by').order_by('-created_at')[:20], answers=answers, interviews=[decorate_interview(i) for i in scoped_interviews(request.user).filter(candidate_id=record).order_by('-interview_date')], reviews=record.workspace_reviews.select_related('reviewer').all(), feedback=visible_feedback, reviewers=record.recruitment_id.recruitment_managers.filter(is_active=True)))
+    return render(request, 'experience/candidate.html', context(request, profile=profile, skill_tags=skill_tags, candidate_phase=candidate_phase(record), portfolio_url=record.portfolio if record.portfolio.startswith(('https://','http://')) else '', active='candidates', title=record.name, candidate=record, note_form=note, can_coordinate=can_coordinate(request.user, record), stages=record.recruitment_id.stage_set.filter(is_active=True).exclude(stage_type__in=['hired','cancelled']).order_by('sequence'), attachments=[(key, next((q['question'] for q in draft.questions if key=='q'+str(q['id'])), 'Screening attachment')) for draft in ApplicationDraft.objects.filter(candidate=record) for key in draft.attachments if key!='profile'], all_stages=record.recruitment_id.stage_set.filter(is_active=True).order_by('sequence'), events=record.workspace_events.exclude(kind='view').select_related('actor')[:15], review_form=ReviewDecisionForm(), notes=StageNote.objects.filter(candidate_id=record).select_related('updated_by').order_by('-created_at')[:20], answers=answers, interviews=[decorate_interview(i) for i in scoped_interviews(request.user).filter(candidate_id=record).order_by('-interview_date')], reviews=record.workspace_reviews.select_related('reviewer').all(), feedback=visible_feedback, reviewers=record.recruitment_id.recruitment_managers.filter(is_active=True)))
 
 
 @workspace

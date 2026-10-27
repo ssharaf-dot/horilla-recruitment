@@ -1,6 +1,7 @@
 """Additive recruitment workflows; existing Horilla records remain authoritative."""
 from django.conf import settings
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 import uuid
 
@@ -82,14 +83,32 @@ class DivisionAccess(models.Model):
 
 
 class WorkflowEvent(models.Model):
-    candidate = models.ForeignKey('recruitment.Candidate', on_delete=models.CASCADE, related_name='workspace_events')
+    candidate = models.ForeignKey('recruitment.Candidate', on_delete=models.PROTECT, related_name='workspace_events', null=True, blank=True)
+    job = models.ForeignKey('recruitment.Recruitment', on_delete=models.PROTECT, related_name='workspace_events', null=True, blank=True)
+    requisition = models.ForeignKey('Requisition', on_delete=models.PROTECT, related_name='activity_events', null=True, blank=True)
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    actor_label = models.CharField(max_length=200, blank=True)
+    applicant_actor = models.ForeignKey('ApplicantAccount', on_delete=models.SET_NULL, null=True, blank=True)
+    origin = models.CharField(max_length=24, default='recorded', choices=[('recorded', 'Recorded interaction'), ('imported', 'Historical source')])
     kind = models.CharField(max_length=40)
     detail = models.TextField(blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ['-created_at', '-pk']
+        indexes = [models.Index(fields=['job', '-created_at'], name='workspace_job_event_time')]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError('Activity entries are retained as recorded. Add a correcting entry instead.')
+        if self.candidate_id and not self.job_id:
+            self.job_id = self.candidate.recruitment_id_id
+        if not self.actor_label:
+            self.actor_label = (self.actor.get_full_name() or self.actor.username) if self.actor_id else ('Applicant · ' + self.applicant_actor.name if self.applicant_actor_id else 'System / actor not recorded')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Activity entries cannot be deleted through the application.')
 
 
 class InterviewPlan(models.Model):
@@ -161,3 +180,87 @@ class CandidateProfile(models.Model):
     version = models.PositiveIntegerField(default=1)
     reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class OfferApproval(models.Model):
+    """An immutable submitted set of terms; a revision requires a new request."""
+    candidate = models.ForeignKey('recruitment.Candidate', on_delete=models.PROTECT, related_name='offer_approvals')
+    prepared_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='prepared_offers')
+    director = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='assigned_offers')
+    role_title = models.CharField(max_length=160)
+    monthly_salary = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(1)])
+    currency = models.CharField(max_length=3, default='AED', choices=[('AED','AED'),('USD','USD'),('GBP','GBP'),('EUR','EUR')])
+    proposed_joining = models.DateField()
+    terms = models.TextField(max_length=4000, help_text='Contract type, allowances, conditions and reference to the reviewed offer package. Do not upload passport details here.')
+    status = models.CharField(max_length=12, default='pending', choices=[('pending','Awaiting Director'),('approved','Approved'),('declined','Changes required'),('withdrawn','Withdrawn by HR')])
+    decision_note = models.TextField(max_length=2000, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    def save(self, *args, **kwargs):
+        if self.pk:
+            original=type(self).objects.get(pk=self.pk)
+            fields=['candidate_id','prepared_by_id','director_id','role_title','monthly_salary','currency','proposed_joining','terms']
+            if any(getattr(self,name)!=getattr(original,name) for name in fields):
+                raise ValidationError('Submitted offer terms cannot be edited. Submit a new request.')
+            if original.status!='pending':
+                raise ValidationError('A decided offer request cannot be changed.')
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-pk']
+        permissions = [('approve_offer', 'Act as HR Director for assigned offer approvals')]
+        constraints = [models.UniqueConstraint(fields=['candidate'], condition=models.Q(status='pending'), name='workspace_one_pending_offer')]
+
+
+class JoiningPlan(models.Model):
+    candidate = models.OneToOneField('recruitment.Candidate', on_delete=models.PROTECT, related_name='joining_plan')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    appointment_at = models.DateTimeField(null=True, blank=True)
+    appointment_location = models.CharField(max_length=240, blank=True)
+    handover_reference = models.CharField(max_length=240, blank=True)
+    version = models.PositiveIntegerField(default=1)
+
+
+class JoiningTask(models.Model):
+    plan = models.ForeignKey(JoiningPlan, on_delete=models.PROTECT, related_name='tasks')
+    key = models.SlugField(max_length=60)
+    phase = models.PositiveSmallIntegerField()
+    title = models.CharField(max_length=180)
+    required_for_joining = models.BooleanField(default=True)
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='joining_tasks')
+    due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=16, default='todo', choices=[('todo','To do'),('in_progress','In progress'),('done','Complete'),('not_applicable','Not applicable')])
+    evidence = models.TextField(max_length=2000, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='completed_joining_tasks')
+    version = models.PositiveIntegerField(default=1)
+    class Meta:
+        ordering = ['phase', 'pk']
+        constraints = [models.UniqueConstraint(fields=['plan','key'], name='workspace_joining_task_key')]
+
+
+class JDDraft(models.Model):
+    job = models.ForeignKey('recruitment.Recruitment', on_delete=models.PROTECT, related_name='jd_drafts')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    brief = models.TextField(max_length=6000)
+    text = models.TextField(max_length=16000, blank=True)
+    source_description_sha256 = models.CharField(max_length=64)
+    provider = models.CharField(max_length=24, default='manual')
+    model_name = models.CharField(max_length=100, blank=True)
+    status = models.CharField(max_length=16, default='draft', choices=[('draft','Draft for HR review'),('applied','Applied by HR'),('failed','Draft attempt did not complete')])
+    version = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+
+class JDProviderConfig(models.Model):
+    """Singleton; encrypted key is never returned to forms, HTML or event metadata."""
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    encrypted_key = models.TextField(blank=True)
+    key_suffix = models.CharField(max_length=4, blank=True)
+    enabled = models.BooleanField(default=False)
+    model_name = models.CharField(max_length=100, default='claude-sonnet-4-6')
+    workspace_id = models.CharField(max_length=100, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)

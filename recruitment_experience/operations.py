@@ -157,7 +157,7 @@ def save_interview(request,pk,candidate,appointment,form):
             plan.status = 'scheduled'
             plan.version += 1
             plan.save()
-            audit(candidate,request.user,'interview','Interview scheduled or updated',interview=appointment.pk,version=plan.version)
+            audit(candidate,request.user,'interview','Interview scheduled for '+starts.astimezone(WORKING_ZONE).strftime('%d %b %Y at %H:%M')+' Dubai',interview=appointment.pk,version=plan.version,starts_at=starts.isoformat())
             shared = 'Your interview is scheduled for ' + starts.strftime('%d %b %Y at %H:%M') + ' Dubai time (UTC+04:00). Check your application for details.'
             StageNote.objects.create(candidate_id=candidate,stage_id=candidate.stage_id,description=shared,updated_by=employee_for(request.user),candidate_can_view=True)
             for email in {candidate.email, *appointment.employee_id.values_list('email',flat=True)}:
@@ -378,14 +378,20 @@ def offer(request,pk):
             if current.offer_letter_status!=record.offer_letter_status or form.cleaned_data['date']>timezone.localdate():
                 form.add_error(None,'The record changed, or the outcome date is in the future. Review before saving.')
             else:
-                values={'offer_letter_status':form.cleaned_data['outcome']}
+                from .workflow import offer_gate, joining_gate
+                outcome=form.cleaned_data['outcome']
+                gate=offer_gate(current) if outcome=='sent' else joining_gate(current) if outcome=='joined' else ''
+                if gate:
+                    form.add_error(None,gate)
+                    return render(request,'experience/form.html',context(request,active='candidates',title='Record an offer outcome',intro=record.name+' · '+gate,form=form,submit_label='Record outcome',cancel_url=reverse('workspace-candidate',args=[pk])))
+                values={'offer_letter_status':outcome}
                 if values['offer_letter_status']=='joined':
                     values['joining_date']=form.cleaned_data['date']
                 Candidate.objects.filter(pk=pk).update(**values)
-                audit(current,request.user,'offer',form.cleaned_data['evidence'],outcome=values['offer_letter_status'],date=str(form.cleaned_data['date']))
+                audit(current,request.user,'offer',form.cleaned_data['evidence'],outcome=values['offer_letter_status'],date=str(form.cleaned_data['date']),approval=current.offer_approvals.order_by('-pk').values_list('pk',flat=True).first())
                 messages.success(request,'Offer outcome recorded. No offer document or email has been generated.')
                 return redirect('workspace-candidate',pk=pk)
-    return render(request,'experience/form.html',context(request,active='candidates',title='Record an offer outcome',intro=record.name+' · Current status: '+record.get_offer_letter_status_display(),form=form,submit_label='Record outcome',cancel_url=reverse('workspace-candidate',args=[pk])))
+    return render(request,'experience/form.html',context(request,active='candidates',title='Record an offer outcome',intro=record.name+' · Current status: '+record.get_offer_letter_status_display()+' · Sending requires Director approval; joining requires the pre-joining checklist.',form=form,submit_label='Record outcome',cancel_url=reverse('workspace-candidate',args=[pk])))
 
 
 @workspace
@@ -405,7 +411,8 @@ def publication(request,pk):
             if form.cleaned_data['action']=='publish' and not all(ok for _,ok in checks):
                 form.add_error(None,'Complete every publication check first.')
             else:
-                Recruitment.objects.filter(pk=job.pk).update(is_published=form.cleaned_data['action']=='publish')
+                job.is_published=form.cleaned_data['action']=='publish'
+                job.save(update_fields=['is_published'])
                 messages.success(request,'Publication status updated. Existing application records are retained.')
                 return redirect('workspace-job',pk=job.pk)
     return render(request,'experience/publication.html',context(request,active='jobs',job=job,checks=checks,form=form))
@@ -461,10 +468,14 @@ def questions(request,pk):
     if request.method=='POST' and request.POST.get('remove','').isdigit():
         question=get_object_or_404(RecruitmentSurvey,recruitment_ids=job,pk=request.POST['remove'])
         question.recruitment_ids.remove(job)
+        from .activity import record_event
+        record_event(job=job,kind='questionnaire',detail='Question removed from future application drafts',metadata={'question':question.pk})
         messages.success(request,'Question removed from future application drafts. Submitted answers and existing draft snapshots remain intact.')
         return redirect('workspace-questions',pk=pk)
     if request.method=='POST' and form.is_valid():
         question=form.save(commit=False);question.sequence=RecruitmentSurvey.objects.filter(recruitment_ids=job).count()+1;question.save();question.recruitment_ids.add(job)
+        from .activity import record_event
+        record_event(job=job,kind='questionnaire',detail='Screening question added',metadata={'question':question.pk})
         messages.success(request,'Question added for new application drafts.')
         return redirect('workspace-questions',pk=pk)
     return render(request,'experience/questions.html',context(request,active='jobs',job=job,questions=RecruitmentSurvey.objects.filter(recruitment_ids=job).order_by('sequence','pk'),form=form))

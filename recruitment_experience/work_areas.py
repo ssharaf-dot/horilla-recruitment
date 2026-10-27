@@ -10,7 +10,7 @@ from .services import decorate_interview
 AREAS = [
     dict(slug='requisitions', number=1, label='Requisitions & assignment', short='Requisitions', steps='01–03', icon='briefcase', purpose='Agree the hiring need, review the request and prepare the vacancy.', tabs=[('plan','Requests & approvals'),('registration','Vacancy registration')]),
     dict(slug='recruitment', number=2, label='Sourcing & selection', short='Recruitment', steps='04–08', icon='people', purpose='Manage vacancies, review CVs and coordinate interviews in one workspace.', tabs=[('jobs','My jobs'),('screen','CVs & screening'),('interview','Interviews & selection')]),
-    dict(slug='offers', number=3, label='Offers & acceptance', short='Offers', steps='09–10', icon='document', purpose='Review the offer process and record confirmed candidate responses.', tabs=[('offer','Offer progress')]),
+    dict(slug='offers', number=3, label='Offers & acceptance', short='Offers', steps='09–10', icon='document', purpose='Review the offer process and record confirmed candidate responses.', tabs=[('offer','Offer progress'),('approvals','Director approvals')]),
     dict(slug='joining', number=4, label='Joining & closure', short='Joining', steps='11–14', icon='check', purpose='Follow accepted candidates through actual joining and the receiving HR team.', tabs=[('handover','Joining board')]),
 ]
 BY_AREA = {a['slug']: a for a in AREAS}
@@ -24,11 +24,11 @@ STEPS = [
     (6,'CV screening','Stakeholder / HR','Available','Managers recommend; HR confirms stage changes and rejections.'),
     (7,'Interview coordination','Assigned TA / HR','Partial','Schedule, edit and download calendar files. Salary/notice-period tracking and invitation delivery are not configured.'),
     (8,'Interview & selection','Interviewer / HR','Available','Record interview evidence and recommendations. HR confirms the next stage.'),
-    (9,'Offer approval','HR Director','Not configured','A separate HR Director approval gate and approved offer terms still need implementation. No approval is implied here.'),
+    (9,'Offer approval','HR Director','Available','HR submits terms; a separate assigned Director approves or requests changes. Recording an offer as sent is blocked until the latest request is approved.'),
     (10,'Offer management','Assigned TA / HR','Partial','Record actual sent, accepted or declined outcomes with evidence. Offer generation, signing, revocation and delivery are not connected.'),
-    (11,'Pre-joining documentation','HR Operations / PRO','Not configured','Document verification checklists and HR Operations / PRO handoffs still need implementation.'),
-    (12,'Pre-boarding & joining','TA / IT','Partial','Actual joining can be recorded. IT, SIM, NDA, welcome tasks and onboarding booking are not configured.'),
-    (13,'Onboarding & handover','TA / Document Controller','Not configured','Document Controller acknowledgement and HRMS transfer are not connected.'),
+    (11,'Pre-joining documentation','HR Operations / PRO','Available','Use the joining checklist to assign document and compliance tasks, due dates and completion evidence. No government or document-store integration is connected.'),
+    (12,'Pre-boarding & joining','TA / IT','Partial','IT, SIM, NDA and welcome checklists are available. Record the agreed onboarding appointment; external invitation delivery is not connected.'),
+    (13,'Onboarding & handover','TA / Document Controller','Not configured','Record personnel-file acknowledgement and the receiving HRMS reference manually. Automatic HRMS transfer is not connected.'),
     (14,'Reporting & closure','Assigned TA','Partial','Current summaries are available. Requisition closure controls, productivity tracking and AWFM reconciliation still need implementation.'),
 ]
 
@@ -65,7 +65,7 @@ def interface_context(request, data):
     return dict(
         area_nav=[dict(a,url=area_url(a['slug'],request),current=active==a['slug'],descriptor=descriptors[a['slug']]) for a in AREAS],
         work_area=area, area_steps=step_rows,
-        work_tabs=[dict(label=label,url=area_url(active,request,tab),current=tab==current_tab) for tab,label in area['tabs']] if area else [],
+        work_tabs=[dict(label=label,url=area_url(active,request,tab),current=tab==current_tab) for tab,label in area['tabs'] if tab!='approvals' or recruiter(request.user) or request.user.has_perm('recruitment_experience.approve_offer')] if area else [],
         assigned_approvals=assigned,rail_interviews=rail,rail_aggregate=scope['aggregate'],
         show_work_area_heading=bool(area and (data.get('phase_slug') or getattr(request,'_workspace_area',None))),
     )
@@ -80,6 +80,9 @@ def area(request,slug):
     if tab not in [t[0] for t in spec['tabs']]: raise Http404()
     request._workspace_area=slug;request._workspace_tab=tab
     from . import views,phase_views
+    if tab=='approvals':
+        from .workflow import approvals
+        return approvals(request)
     if tab=='jobs':
         from .access import leadership,scoped_jobs
         if request.user.is_authenticated and leadership(request.user) and not recruiter(request.user) and not scoped_jobs(request.user).exists():
