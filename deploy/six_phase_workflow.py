@@ -72,6 +72,9 @@ try:
    for area_spec in AREAS:
     for tab,label in area_spec['tabs']:
      response=c.get(reverse('workspace-area',args=[area_spec['slug']]),{'tab':tab})
+     if tab=='approvals' and who!='HR':
+      check(response.status_code==403,who+' cannot enter Director approval queue')
+      continue
      check(response.status_code==200,who+' opens work area '+area_spec['slug']+'/'+tab)
      check(response.content.count(b'class="wx-area-tab ')==4,who+' has exactly four work areas '+tab)
      check(b'Process reference, not a candidate completion checklist' in response.content,'capability guide is not a completion claim '+who+'/'+tab)
@@ -91,7 +94,7 @@ try:
   if otherjob:
    response=manager.get(reverse('workspace-area',args=['recruitment']),{'tab':'screen','job':otherjob.pk})
    check(not other or other.name.encode() not in response.content,'forged work-area job scope cannot expose applicant')
-  check(b'Offer approval' in a.get(reverse('workspace-area',args=['offers'])).content and b'Not configured' in a.get(reverse('workspace-area',args=['offers'])).content,'offer approval is explicitly not implemented')
+  check(b'Offer approval' in a.get(reverse('workspace-area',args=['offers'])).content and b'Director approvals' in a.get(reverse('workspace-area',args=['offers'])).content,'offer approval workflow is linked from its work area')
   check(b'AWFM' in a.get(reverse('workspace-area',args=['joining'])).content,'AWFM and closure gap documented in guide')
   response=a.get(reverse('workspace-jobs'),{'status':'draft','q':'no-match-'+suffix,'division':'unassigned'})
   check(response.status_code==200 and b'No jobs match' in response.content,'combined job filters render an empty state')
