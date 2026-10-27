@@ -314,8 +314,11 @@ def director_demo_setup(request):
             if hasattr(user,'is_new_employee'):User.objects.filter(pk=user.pk).update(is_new_employee=False)
             user.user_permissions.add(Permission.objects.get(content_type__app_label='recruitment_experience',codename='approve_offer'))
             employee=Employee.objects.create(employee_user_id=user,employee_first_name='Demo',employee_last_name='HR Director',email='demo.director@example.invalid',phone='0000000000')
-            info,_=EmployeeWorkInformation.objects.get_or_create(employee_id=employee)
-            EmployeeWorkInformation.objects.filter(pk=info.pk).update(company_id=form.cleaned_data['employer'])
+            # Employee.save() already creates its one-to-one work-information
+            # row with no company. A selected-company manager hides that row;
+            # internal provisioning must use the unfiltered base manager.
+            info,_=EmployeeWorkInformation._base_manager.get_or_create(employee_id=employee)
+            EmployeeWorkInformation._base_manager.filter(pk=info.pk).update(company_id=form.cleaned_data['employer'])
         messages.success(request,'demo_director is ready. HR can select this account when submitting offer approval requests.')
         return redirect('workspace-director-demo')
     return render(request,'experience/director_demo.html',context(request,active='settings',title='Demo HR Director account',form=form,existing=existing))
