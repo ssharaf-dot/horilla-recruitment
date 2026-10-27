@@ -1,4 +1,5 @@
 from django.urls import path
+from . import requisitions
 from . import views
 from . import operations, application, phase_views, profile_views, work_areas, workflow, jd
 
@@ -39,6 +40,13 @@ urlpatterns = [
     path('recruitment/workspace/jobs/<int:pk>/questions/', operations.questions, name='workspace-questions'),
     path('recruitment/workspace/settings/access/', operations.access_settings, name='workspace-access-settings'),
     path('recruitment/workspace/settings/', operations.settings_home, name='workspace-settings'),
+    path('recruitment/workspace/requisitions/new/', requisitions.edit, name='workspace-requisition-new'),
+    path('recruitment/workspace/requisitions/<int:pk>/', requisitions.detail, name='workspace-requisition-detail'),
+    path('recruitment/workspace/requisitions/<int:pk>/edit/', requisitions.edit, name='workspace-requisition-edit'),
+    path('recruitment/workspace/requisitions/<int:pk>/assign/', requisitions.assign, name='workspace-requisition-assign'),
+    path('recruitment/workspace/requisitions/<int:pk>/documents/<str:kind>/', requisitions.document, name='workspace-requisition-document'),
+    path('recruitment/workspace/requisitions/<int:pk>/jd/', requisitions.ai_draft, name='workspace-requisition-jd'),
+    path('recruitment/workspace/requisitions/<int:pk>/jd/<int:draft_pk>/', requisitions.ai_review, name='workspace-requisition-jd-review'),
     path('recruitment/workspace/requisitions/', operations.requisitions, name='workspace-requisitions'),
     path('recruitment/workspace/requisitions/<int:pk>/decision/', operations.requisition_decide, name='workspace-requisition-decide'),
     path('recruitment/workspace/candidates/<int:pk>/offer/', operations.offer, name='workspace-offer'),
