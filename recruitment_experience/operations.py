@@ -301,7 +301,7 @@ def vacancy_form(request,pk=None):
         form.fields['company_id'].disabled=True
         if requisition:
             form.fields['description'].disabled=bool(requisition.jd_text)
-            form.fields['description'].help_text='Approved Step 1 JD. If it was uploaded as a PDF, review the requisition document and enter a public description after registration.'
+            form.fields['description'].help_text='Approved Step 1 JD. If it was uploaded as a PDF, review the requisition document and enter its public wording below.'
             form.fields['title'].disabled=True
     else:
         form.fields['company_id'].queryset=Company.objects.filter(pk__in=scoped_jobs(request.user).values('company_id')) if not request.user.is_superuser else Company.objects.all()
@@ -310,7 +310,7 @@ def vacancy_form(request,pk=None):
             form.add_error(None,'Start with an approved hiring requisition, then select Prepare approved vacancy. Existing vacancies can be edited directly.')
         else:
             return save_vacancy(request,form,job,requisition)
-    return render(request,'experience/form.html',context(request,active='jobs',title='Edit vacancy' if job else 'Prepare a vacancy',intro='Step 3 · Register the approved hiring need. Its legal employer, openings and JD carry forward. Saving creates a draft; publishing happens in Sourcing & Selection.',form=form,submit_label='Save vacancy',cancel_url=reverse('workspace-requisitions') if not job else reverse('workspace-jobs')))
+    return render(request,'experience/form.html',context(request,active='jobs',title='Edit vacancy' if job else 'Step 3 · Register Vacancy',intro='Update vacancy details. The legal employer is preserved.' if job else 'Step 3 · Register the approved hiring need. Its legal employer, openings and JD carry forward. Saving creates a draft; publishing happens in Sourcing & Selection.',form=form,submit_label='Save vacancy',cancel_url=reverse('workspace-requisitions') if not job else reverse('workspace-jobs')))
 
 
 def save_vacancy(request,form,job,requisition):

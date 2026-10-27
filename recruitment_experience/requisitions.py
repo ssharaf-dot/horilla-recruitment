@@ -175,7 +175,7 @@ def decision(request,pk):
         elif action=='approved' and not ((item.jd_text.strip() or item.jd_document) and (item.kpa_text.strip() or item.kpa_document) and item.assignment_director_id):messages.error(request,'This legacy request needs a JD, KPA and assignment Director. Return it for changes before approval.')
         else:
             item.status=action;item.decision_note=note;item.decided_at=timezone.now();item.version+=1;item.save()
-            record_event(requisition=item,kind='requisition_decision',detail='Step 2: CEO '+{'approved':'approved the hiring need','changes':'requested changes','declined':'declined the hiring need'}[action],metadata={'decision':action,'version':item.version})
+            record_event(requisition=item,kind='requisition_decision',detail='Step 2: CEO '+{'approved':'approved the hiring need','changes':'requested changes','declined':'declined the hiring need'}[action]+(': '+note if note else ''),metadata={'decision':action,'version':item.version})
             messages.success(request,'CEO decision recorded. '+('The HR Director now assigns a TA owner.' if action=='approved' else 'The requester can revise and resubmit.' if action=='changes' else 'The request remains in history.'))
     return redirect('workspace-requisition-detail',pk=pk)
 
@@ -203,7 +203,7 @@ def assign(request,pk):
         elif item.status!='approved' or item.job_id or item.version!=form.cleaned_data['expected_version']:messages.error(request,'CEO approval is required and registered vacancies cannot be reassigned here. Reload the latest request.')
         else:
             item.ta_owner=form.cleaned_data['ta_owner'];item.assigned_by=request.user;item.assigned_at=timezone.now();item.version+=1;item.save()
-            record_event(requisition=item,kind='requisition_assignment',detail='Step 2 complete: HR Director assigned TA owner',metadata={'ta_owner_id':item.ta_owner_id,'version':item.version})
+            record_event(requisition=item,kind='requisition_assignment',detail='Step 2 complete: HR Director assigned TA owner '+name(item.ta_owner),metadata={'ta_owner_id':item.ta_owner_id,'version':item.version})
             messages.success(request,'TA assigned. Step 3 is now ready for that TA to register the vacancy.')
     return redirect('workspace-requisition-detail',pk=pk)
 
