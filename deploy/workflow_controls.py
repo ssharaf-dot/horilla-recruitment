@@ -189,14 +189,19 @@ with transaction.atomic():
  setupurl=url('workspace-director-demo')
  check(hr.get(setupurl).status_code==403,'HR cannot provision Director accounts')
  if not User.objects.filter(username='demo_director').exists():
+  # Real browser sessions normally have an active company, unlike the
+  # original empty-session fixture. The automatic staff row starts unassigned.
+  session=a.session;session['selected_company']=str(job.company_id_id);session.save()
   password=secrets.token_urlsafe(32)
   check(a.post(setupurl,{'employer':job.company_id_id,'password':password,'confirm_password':password,'confirm':'on'}).status_code==302,'administrator provisions dedicated Director account')
   demo=User.objects.get(username='demo_director')
+  check(EmployeeWorkInformation._base_manager.filter(employee_id=demo.employee_get,company_id=job.company_id).count()==1,'company-filtered provisioning preserves one staff work record')
   check(demo.has_perm('recruitment_experience.approve_offer') and not demo.is_superuser and not demo.has_perm('recruitment.view_recruitment'),'demo Director has only bounded approval access')
   loginclient=client();check(loginclient.login(username='demo_director',password=password),'demo Director password authenticates')
   check(loginclient.get(url('recruitment-dashboard')).status_code==200,'new Director login lands on approvals')
   check(loginclient.get(url('workspace-candidate',candidate.pk)).status_code==404,'new Director cannot browse candidate profiles')
   check(a.post(setupurl,{'employer':job.company_id_id,'password':'changed','confirm_password':'changed','confirm':'on'}).status_code==200 and User.objects.get(pk=demo.pk).check_password(password),'existing Director account is never overwritten')
+ session=a.session;session['selected_company']='all';session.save()
  # Real CSRF middleware must reject forged state-changing requests.
  check(client(roles['hr'],csrf=True).post(prepare,values).status_code==403,'offer requests enforce CSRF protection')
  check(client(admin,csrf=True).post(aiurl,configdata).status_code==403,'provider settings enforce CSRF protection')
