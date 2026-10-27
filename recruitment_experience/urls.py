@@ -1,5 +1,5 @@
 from django.urls import path
-from . import requisitions
+from . import requisitions,requisition_wizard
 from . import views
 from . import operations, application, phase_views, profile_views, work_areas, workflow, jd
 
@@ -40,6 +40,7 @@ urlpatterns = [
     path('recruitment/workspace/jobs/<int:pk>/questions/', operations.questions, name='workspace-questions'),
     path('recruitment/workspace/settings/access/', operations.access_settings, name='workspace-access-settings'),
     path('recruitment/workspace/settings/', operations.settings_home, name='workspace-settings'),
+    path('recruitment/workspace/requisitions/<int:pk>/ceo-edit/', requisition_wizard.ceo_edit, name='workspace-requisition-ceo-edit'),
     path('recruitment/workspace/requisitions/new/', requisitions.edit, name='workspace-requisition-new'),
     path('recruitment/workspace/requisitions/<int:pk>/', requisitions.detail, name='workspace-requisition-detail'),
     path('recruitment/workspace/requisitions/<int:pk>/edit/', requisitions.edit, name='workspace-requisition-edit'),

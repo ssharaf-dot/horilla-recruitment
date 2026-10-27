@@ -155,9 +155,9 @@ class ApplicationDraft(models.Model):
 
 class Requisition(models.Model):
     title = models.CharField(max_length=120)
-    division = models.ForeignKey(Division, on_delete=models.PROTECT)
-    employer = models.ForeignKey('base.Company', on_delete=models.PROTECT)
-    openings = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(100)])
+    division = models.ForeignKey(Division, on_delete=models.PROTECT, null=True, blank=True)
+    employer = models.ForeignKey('base.Company', on_delete=models.PROTECT, null=True, blank=True)
+    openings = models.PositiveSmallIntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(100)])
     reason = models.TextField(max_length=4000)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='workspace_requisitions')
     approver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='assigned_requisitions')
@@ -177,6 +177,44 @@ class Requisition(models.Model):
     assigned_at = models.DateTimeField(null=True, blank=True)
     registered_at = models.DateTimeField(null=True, blank=True)
     version = models.PositiveIntegerField(default=1)
+
+    department = models.CharField(max_length=120, blank=True)
+    grade = models.CharField(max_length=100, blank=True)
+    work_location = models.CharField(max_length=160, blank=True)
+    employment_type = models.CharField(max_length=24, blank=True, choices=[('full_time','Full time'),('part_time','Part time'),('contract','Contract'),('temporary','Temporary'),('internship','Internship')])
+    hire_reason = models.CharField(max_length=20, blank=True, choices=[('new','New position'),('replacement','Replacement'),('backfill','Internal backfill')])
+    target_start_date = models.DateField(null=True, blank=True)
+    salary_min = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    salary_max = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    salary_currency = models.CharField(max_length=3, default='AED', choices=[('AED','AED'),('USD','USD'),('EUR','EUR'),('GBP','GBP')])
+    salary_period = models.CharField(max_length=8, default='month', choices=[('month','Per month'),('year','Per year')])
+    salary_basis = models.CharField(max_length=12, blank=True, choices=[('gross','Gross cash including fixed allowances'),('base','Base pay only')])
+    annual_budget = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    budget_notes = models.TextField(max_length=2000, blank=True)
+    jd_outline = models.JSONField(default=dict, blank=True)
+    jd_reviewed = models.BooleanField(default=False)
+    wizard_step = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1),MaxValueValidator(5)])
+    approved_version = models.PositiveIntegerField(default=0)
+    resume_section = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1),MaxValueValidator(5)])
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    vacancy_setup = models.JSONField(default=dict, blank=True)
+    creation_token = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+
+
+class RequisitionRevision(models.Model):
+    requisition = models.ForeignKey(Requisition, on_delete=models.PROTECT, related_name='revisions')
+    version = models.PositiveIntegerField()
+    kind = models.CharField(max_length=32)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    snapshot = models.JSONField(default=dict)
+    note = models.TextField(max_length=2000, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ['-pk']
+        constraints = [models.UniqueConstraint(fields=['requisition','version'], name='workspace_requisition_revision')]
+    def save(self,*args,**kwargs):
+        if self.pk:raise ValidationError('Requisition versions are retained. Record a new version instead.')
+        super().save(*args,**kwargs)
 
 
 class CandidateProfile(models.Model):

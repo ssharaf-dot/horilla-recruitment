@@ -238,16 +238,28 @@ try:
     if otherjob:
         VacancyProfile.objects.update_or_create(job=otherjob,defaults={'division':otherdivision})
     original_jobs=Recruitment.objects.count()
-    response=manager.post(url('workspace-requisitions'),{'title':'Synthetic approved vacancy','division':division.pk,'employer':job.company_id_id,'openings':2,'reason':'Synthetic vacancy approval scenario','approver':admin.pk,'assignment_director':admin.pk,'jd_text':'A synthetic vacancy with clear responsibilities and requirements.','kpa_text':'Deliver the documented outcomes and meet reviewed performance measures.','expected_version':1,'action':'submit','confirm':'on'})
-    check(response.status_code==302,'new vacancy requisition submitted')
-    req=Requisition.objects.get(title='Synthetic approved vacancy')
+    import uuid
+    from recruitment_experience.requisition_wizard import SECTIONS
+    newdata={'title':'Synthetic approved vacancy','division':division.pk,'employer':job.company_id_id,'openings':2,'reason':'Synthetic vacancy approval scenario','department':'Analysis','work_location':'Dubai','employment_type':'full_time','hire_reason':'new','approver':admin.pk,'assignment_director':admin.pk,'jd_text':'A synthetic vacancy with clear responsibilities and requirements.','jd_reviewed':'on','kpa_outcomes':'Deliver documented outcomes and maintain accurate reviewed reports.','kpa_measures':'Monthly report reviewed by the manager','kpa_timeframe':'Within the first 90 days','salary_min':'8000','salary_max':'12000','salary_currency':'AED','salary_period':'month','salary_basis':'gross','annual_budget':'350000','budget_notes':'Synthetic total for two openings','confirm':'on','creation_token':str(uuid.uuid4())}
+    req=None
+    for section in range(1,6):
+        values={k:v for k,v in newdata.items() if k in SECTIONS[section]}
+        values.update(section=section,expected_version=req.version if req else 1,creation_token=newdata['creation_token'],action='submit' if section==5 else 'next')
+        response=manager.post(url('workspace-requisition-edit',req.pk) if req else url('workspace-requisition-new'),values)
+        assert response.status_code==302,(section,response.status_code,response.content.decode()[:100])
+        req=Requisition.objects.get(title=newdata['title'])
+    check(response.status_code==302 and req.status=='pending','new vacancy requisition submitted through saved wizard')
     check(manager.post(url('workspace-requisition-decide',req.pk),{'decision':'approved','confirm':'yes'}).status_code==403,'requester cannot approve requisition')
     check(a.post(url('workspace-requisition-decide',req.pk),{'decision':'approved','confirm':'yes','expected_version':req.version}).status_code==302,'named approver confirms requisition')
     check(Recruitment.objects.count()==original_jobs,'approval alone does not publish or create a job')
     req.refresh_from_db()
     check(a.post(url('workspace-requisition-assign',req.pk),{'ta_owner':admin.pk,'expected_version':req.version,'confirm':'on'}).status_code==302,'Director assigns one TA after CEO approval')
     payload={'title':'Synthetic approved vacancy','company_id':job.company_id_id,'open_positions':[position.pk],'vacancy':99,'description':'A synthetic vacancy with clear responsibilities.','start_date':str(timezone.localdate()),'end_date':str(timezone.localdate()+timedelta(days=40)),'optional_resume':''}
-    response=a.post(url('workspace-vacancy-new')+'?requisition='+str(req.pk),payload)
+    req.refresh_from_db();payload['expected_version']=req.version
+    response=a.post(url('workspace-vacancy-new')+'?requisition='+str(req.pk)+'&section=setup',payload)
+    assert response.status_code==302
+    req.refresh_from_db()
+    response=a.post(url('workspace-vacancy-new')+'?requisition='+str(req.pk)+'&section=review',{'expected_version':req.version,'confirm':'yes'})
     check(response.status_code==302,'approved requisition becomes a draft vacancy')
     req.refresh_from_db();created=req.job
     check(created and created.vacancy==2 and not created.is_published,'approved headcount used and new job remains unpublished')
