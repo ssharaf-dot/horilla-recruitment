@@ -50,8 +50,8 @@ try:
   roles['leader'].user_permissions.add(Permission.objects.get(codename='view_hiringoverview'))
   manager,outsider,leader=(client(roles[r]) for r in ['manager','outsider','leader'])
   additional=HiringRequest.objects.create(job=job,openings=1,reason='Synthetic phase approval check',requested_by=admin)
-  check(('Opening request #'+str(additional.pk)).encode() in phase(a,'plan').content,'approval board includes additional openings')
-  check(('Opening request #'+str(additional.pk)).encode() not in phase(manager,'plan').content,'manager approval board excludes another requester opening')
+  check(reverse('workspace-requests').encode() in phase(a,'plan').content and ('id="request-'+str(additional.pk)+'"').encode() in a.get(reverse('workspace-requests')).content,'requisition wizard links to authorized additional-opening workflow')
+  check(('id="request-'+str(additional.pk)+'"').encode() not in manager.get(reverse('workspace-requests')).content,'manager additional-opening view excludes another requester opening')
   import fitz
   pdf=fitz.open();page=pdf.new_page();page.insert_text((72,72),'Name: Sam Demo\nEmail: sam.demo@example.invalid\nPhone: +971501234567\nProfessional Summary\nFacilities specialist with property operations experience.\nWork Experience\nFacilities Coordinator - Demo Estates\n2022 - 2025\nEducation\nDiploma in Facilities Management\nSkills\nMaintenance planning, Vendor coordination, Reporting')
   raw=pdf.tobytes();pdf.close()

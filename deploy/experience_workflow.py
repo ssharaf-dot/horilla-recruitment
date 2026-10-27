@@ -238,12 +238,14 @@ try:
     if otherjob:
         VacancyProfile.objects.update_or_create(job=otherjob,defaults={'division':otherdivision})
     original_jobs=Recruitment.objects.count()
-    response=manager.post(url('workspace-requisitions'),{'title':'Synthetic approved vacancy','division':division.pk,'employer':job.company_id_id,'openings':2,'reason':'Synthetic vacancy approval scenario','approver':admin.pk})
+    response=manager.post(url('workspace-requisitions'),{'title':'Synthetic approved vacancy','division':division.pk,'employer':job.company_id_id,'openings':2,'reason':'Synthetic vacancy approval scenario','approver':admin.pk,'assignment_director':admin.pk,'jd_text':'A synthetic vacancy with clear responsibilities and requirements.','kpa_text':'Deliver the documented outcomes and meet reviewed performance measures.','expected_version':1,'action':'submit','confirm':'on'})
     check(response.status_code==302,'new vacancy requisition submitted')
     req=Requisition.objects.get(title='Synthetic approved vacancy')
     check(manager.post(url('workspace-requisition-decide',req.pk),{'decision':'approved','confirm':'yes'}).status_code==403,'requester cannot approve requisition')
-    check(a.post(url('workspace-requisition-decide',req.pk),{'decision':'approved','confirm':'yes'}).status_code==302,'named approver confirms requisition')
+    check(a.post(url('workspace-requisition-decide',req.pk),{'decision':'approved','confirm':'yes','expected_version':req.version}).status_code==302,'named approver confirms requisition')
     check(Recruitment.objects.count()==original_jobs,'approval alone does not publish or create a job')
+    req.refresh_from_db()
+    check(a.post(url('workspace-requisition-assign',req.pk),{'ta_owner':admin.pk,'expected_version':req.version,'confirm':'on'}).status_code==302,'Director assigns one TA after CEO approval')
     payload={'title':'Synthetic approved vacancy','company_id':job.company_id_id,'open_positions':[position.pk],'vacancy':99,'description':'A synthetic vacancy with clear responsibilities.','start_date':str(timezone.localdate()),'end_date':str(timezone.localdate()+timedelta(days=40)),'optional_resume':''}
     response=a.post(url('workspace-vacancy-new')+'?requisition='+str(req.pk),payload)
     check(response.status_code==302,'approved requisition becomes a draft vacancy')
