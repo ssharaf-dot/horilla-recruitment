@@ -17,7 +17,7 @@ HR sees permitted operational work; managers see assigned applications and their
 
 ## Counts and stage mapping
 
-Phase 1 counts visible requisitions plus visible additional-opening requests; phase 2 counts permitted vacancies, including draft, published and closed records. Phases 3–6 count applications/joiners. Do not add these different units into a single funnel total.
+Phase 1 now counts active requisitions only; additional-opening requests are linked and counted separately in Work Area 1. phase 2 counts permitted vacancies, including draft, published and closed records. Phases 3–6 count applications/joiners. Do not add these different units into a single funnel total.
 
 Every scoped application is classified once, in this order:
 
