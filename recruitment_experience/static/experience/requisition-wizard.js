@@ -37,6 +37,6 @@
     finally{submitting=false;buttons.forEach(function(b){b.disabled=false;});if(status)status.textContent='Not saved · check the message above';}
   });
   window.addEventListener('beforeunload',function(event){if(dirty&&!submitting){event.preventDefault();event.returnValue='';}});
-  document.querySelectorAll('a').forEach(function(link){link.addEventListener('click',function(event){if(dirty&&!submitting){if(!window.confirm('You have unsaved changes. Stay on this page to use Save & Next or Save & close. Leave without saving?'))event.preventDefault();else dirty=false;}});});
+  document.querySelectorAll('a').forEach(function(link){link.addEventListener('click',function(event){if(link.target==='_blank'||link.hasAttribute('download')||(link.hash&&link.origin===location.origin&&link.pathname===location.pathname&&link.search===location.search))return;if(dirty&&!submitting){if(!window.confirm('You have unsaved changes. Stay on this page to use Save & Next or Save & close. Leave without saving?'))event.preventDefault();else dirty=false;}});});
   var errors=document.getElementById('request-errors');if(errors)errors.scrollIntoView({block:'start'});
 })();
