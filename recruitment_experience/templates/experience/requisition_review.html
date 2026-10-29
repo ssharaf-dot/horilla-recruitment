@@ -1,0 +1,18 @@
+{% extends 'experience/base.html' %}{% load static %}{% block content %}
+{% include 'experience/requisition_steps.html' %}
+<nav class="wx-rq-subnav" aria-label="Level 3 · Current section"><span class="wx-rq-level">SECTION</span><div><span aria-current="step">2A · CEO review</span><span class="wx-rq-locked">2B · Recruiter assignment</span></div></nav>
+<div class="wx-rq-meta"><a href="{% url 'workspace-requisition-detail' item.pk %}">← Request status</a><span>REQ-{{ item.pk }} · Version {{ item.version }} · CEO action</span></div>
+<div class="wx-heading"><div><h1>{% if decision %}Record your decision{% else %}Review the hiring package{% endif %}</h1><p>{% if decision %}Choose one outcome. Nothing moves forward until you confirm it.{% else %}Check the need, JD, success measures and proposed budget before choosing an outcome.{% endif %}</p></div></div>
+{% if package_issues %}<section class="wx-message"><b>This package is not ready for approval</b><ul>{% for step,problem in package_issues %}<li>{{ problem }}</li>{% endfor %}</ul><p>You can return it for completion. Approval routing is corrected by the requester in Step 1E.</p></section>{% endif %}
+{% if not decision %}
+<section class="wx-card"><h2>{{ item.title }}</h2><p class="wx-caption">Requested by {{ item.requested_by.get_full_name|default:item.requested_by.username }} · Submitted {{ item.submitted_at|date:'d M Y H:i'|default:'Before the saved wizard was introduced' }}</p>{% include 'experience/requisition_package.html' %}</section>
+<section class="wx-card"><h2>What happens after your decision?</h2><p><b>Approve:</b> {{ item.assignment_director.get_full_name|default:item.assignment_director.username|default:'The named HR Director' }} assigns one recruiter. <b>Return:</b> the requester corrects the package and submits it again. <b>Reject:</b> the request closes with your reason retained.</p></section>
+<div class="wx-rq-actionbar"><a class="wx-button secondary" href="{% url 'workspace-requisition-ceo-edit' item.pk %}">Edit the hiring package</a><a class="wx-button" href="?section=decision">Continue to decision →</a></div>
+{% else %}
+<section class="wx-card"><h2>Package being decided</h2>{% include 'experience/requisition_package.html' %}<p><a href="{% url 'workspace-requisition-ceo-edit' item.pk %}">Need to change the JD, success measures, role or budget? Edit the package first →</a></p></section>
+<form class="wx-form wx-rq-wizard" method="post" data-requisition-form>{% csrf_token %}
+{% if form.errors %}<div id="request-errors" class="wx-message error" role="alert"><h2>Check your decision</h2>{{ form.non_field_errors }}{% for field in form %}{% for error in field.errors %}<p><a href="#{{ field.id_for_label }}">{{ field.label }}</a>: {{ error }}</p>{% endfor %}{% endfor %}</div>{% endif %}
+<section class="wx-card wx-rq-decision">{{ form.as_p }}<p class="wx-caption">This changes the internal request status. It does not publish a job or send an email.</p></section>
+<div class="wx-rq-actionbar"><a class="wx-button secondary" href="{% url 'workspace-requisition-review' item.pk %}">← Back to package</a><button class="wx-button" type="submit">Confirm & record decision →</button></div></form>
+<script src="{% static 'experience/requisition-wizard.js' %}?v=handoff-review-r1" defer></script>{% endif %}
+{% endblock %}

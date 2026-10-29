@@ -53,8 +53,10 @@ def interface_context(request, data):
         'joining':f"{counts.get('handover',0)} joiners",
     }
     scope=phase_scope(request)
-    assigned=scope['requisitions'].filter(Q(approver=request.user,status='pending') | Q(assignment_director=request.user,status='approved',ta_owner__isnull=True) | Q(ta_owner=request.user,status='approved',job__isnull=True)).count()
-    action_tab='review' if scope['requisitions'].filter(Q(approver=request.user,status='pending')|Q(assignment_director=request.user,status='approved',ta_owner__isnull=True)).exists() else 'registration'
+    from .requisitions import decorate_request,step_for
+    tasks=[row for row in scope['requisitions'].filter(job__isnull=True).exclude(status__in=['draft','changes','declined']) if decorate_request(row,request.user).viewer_acts]
+    assigned=len(tasks)
+    action_tab='review' if any(step_for(row)==2 for row in tasks) else 'registration'
     area=BY_AREA.get(active)
     current_tab=getattr(request,'_workspace_tab',None) or data.get('phase_slug') or {'jobs':'jobs','candidates':'screen','interviews':'interview','requests':'plan'}.get(data.get('active'))
     lower,upper={'requisitions':(1,3),'recruitment':(4,8),'offers':(9,10),'joining':(11,14)}.get(active,(0,0))

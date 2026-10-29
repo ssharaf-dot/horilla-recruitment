@@ -35,16 +35,15 @@ def editable(user, item):
 
 
 def can_register(user,item):
-    # An explicit Director assignment is required; legacy approved rows are not
-    # silently treated as having completed the new assignment workflow.
-    return (item.status=='approved' and item.approved_version>0 and item.ta_owner_id is not None and item.assigned_at is not None
-            and item.ta_owner.is_active and recruiter(item.ta_owner)
-            and (user.is_superuser or (recruiter(user) and item.ta_owner_id==user.pk))
-            and permitted_requisitions(user).filter(pk=item.pk).exists())
+    from .requisition_handoffs import approved_valid,ta_eligible
+    return bool(approved_valid(item) and item.assigned_at and ta_eligible(item.ta_owner,item) and user.pk==item.ta_owner_id and permitted_requisitions(user).filter(pk=item.pk).exists())
 
 
 def step_for(item):
-    return 3 if item.job_id or (item.status=='approved' and item.ta_owner_id and item.assigned_at) else 1 if item.status in ['draft','changes'] else 2
+    from .requisition_handoffs import approved_valid,ta_eligible
+    if item.job_id:return 3
+    if item.status in ['draft','changes']:return 1
+    return 3 if approved_valid(item) and item.assigned_at and ta_eligible(item.ta_owner,item) else 2
 
 
 def steps(selected=1,item=None,counts=None):
@@ -63,19 +62,24 @@ def page_context(request,**values):
 
 def status_label(item):
     if item.job_id:return 'Vacancy registered'
-    if item.status=='approved':return 'Ready for vacancy registration' if item.assigned_at and item.ta_owner_id else 'Awaiting recruiter assignment'
+    if item.status=='approved':
+        from .requisition_handoffs import approved_valid,ta_eligible
+        if not approved_valid(item):return 'Approval package needs correction'
+        return 'Ready for vacancy registration' if item.assigned_at and ta_eligible(item.ta_owner,item) else 'Recruiter reassignment required' if item.ta_owner_id else 'Awaiting recruiter assignment'
     return {'draft':'Draft','changes':'Changes requested','pending':'Awaiting CEO approval','declined':'Rejected'}.get(item.status,item.status)
 
 
 def next_owner(item):
+    if item.status=='approved' and step_for(item)==2:return item.approver if not item.approved_version else item.assignment_director
     return item.requested_by if item.status in ['draft','changes'] else item.approver if item.status=='pending' else item.assignment_director if item.status=='approved' and not item.ta_owner_id else item.ta_owner
 
 
 def decorate_request(item,user):
     item.status_label=status_label(item);item.next_owner=name(next_owner(item))
-    item.viewer_acts=(editable(user,item) or (item.status=='pending' and item.approver_id==user.pk and user.has_perm('recruitment_experience.approve_hiringrequest')) or (item.status=='approved' and not item.ta_owner_id and item.assignment_director_id==user.pk and user.has_perm('recruitment_experience.approve_offer')) or (not item.job_id and can_register(user,item)))
-    item.next_action=('Resume draft' if item.status=='draft' else 'Revise request' if item.status=='changes' else 'Review hiring package' if item.status=='pending' else 'Assign recruiter' if not item.ta_owner_id else 'Register vacancy') if item.viewer_acts else 'View request'
-    item.waiting_since=item.assigned_at or item.decided_at or item.submitted_at or item.created_at
+    from .requisition_handoffs import can_assign as may_assign,can_correct,approved_valid
+    item.viewer_acts=(editable(user,item) or (item.status=='pending' and item.approver_id==user.pk and user.has_perm('recruitment_experience.approve_hiringrequest')) or (step_for(item)==2 and may_assign(user,item)) or (item.status=='approved' and not approved_valid(item) and can_correct(user,item)) or (not item.job_id and can_register(user,item)))
+    item.next_action=('Request package correction' if item.status=='approved' and not approved_valid(item) else 'Resume draft' if item.status=='draft' else 'Revise request' if item.status=='changes' else 'Review hiring package' if item.status=='pending' else 'Assign recruiter' if step_for(item)==2 else 'Register vacancy') if item.viewer_acts else 'View request'
+    item.waiting_since=(item.updated_at or item.created_at) if item.status in ['draft','changes'] else item.assigned_at or item.decided_at or item.submitted_at or item.created_at
     return item
 
 
@@ -154,11 +158,12 @@ def detail(request,pk):
     for event in events:
         event.display_actor=name(event.actor) if event.actor else event.actor_label or 'System'
         event.display_detail='Requisition created' if event.kind=='created' else event.detail or event.kind
-    milestones=[e for e in events if e.kind not in ['updated','created']]
+    milestones=[e for e in events if e.kind not in ['updated','created','view','requisition_document']]
     if not milestones:milestones=[e for e in events if e.kind=='created']
     can_decide=item.status=='pending' and item.approver_id==request.user.pk and request.user.has_perm('recruitment_experience.approve_hiringrequest')
     legacy_return=item.status=='approved' and not item.approved_version and not item.job_id and item.approver_id==request.user.pk and request.user.has_perm('recruitment_experience.approve_hiringrequest')
-    can_assign=item.status=='approved' and item.approved_version>0 and not item.job_id and item.assignment_director_id==request.user.pk and request.user.has_perm('recruitment_experience.approve_offer')
+    from .requisition_handoffs import can_assign as may_assign,can_correct,approved_valid,ta_eligible
+    can_assign=may_assign(request.user,item)
     form=AssignmentForm(requisition=item,initial={'expected_version':item.version,'ta_owner':item.ta_owner_id}) if can_assign else None
     revisions=list(item.revisions.select_related('actor').order_by('-pk')[:20])
     differences=[]
@@ -167,57 +172,37 @@ def detail(request,pk):
         before,after=content_versions[1].snapshot,content_versions[0].snapshot
         labels={'title':'Role title','openings':'Openings','jd_text':'Public JD','kpa_text':'Success measures','salary_min':'Minimum salary','salary_max':'Maximum salary','salary_currency':'Currency','salary_period':'Pay period','salary_basis':'Salary basis','annual_budget':'Annual total budget','grade':'Grade / seniority','department':'Department','work_location':'Location','reason':'Hiring reason','budget_notes':'Budget assumptions'}
         differences=[dict(label=label,before=before.get(key,'') or 'Not supplied',after=after.get(key,'') or 'Not supplied') for key,label in labels.items() if before.get(key)!=after.get(key)]
-    return render(request,'experience/requisition_detail.html',page_context(request,title=item.title,item=item,wizard_section=True,hide_action_rail=True,wizard_steps=steps(step_for(item),item),can_edit=editable(request.user,item),can_decide=can_decide,legacy_return=legacy_return,can_assign=can_assign,assignment_form=form,can_register=can_register(request.user,item),events=milestones,audit_events=events,revisions=revisions,differences=differences,package_issues=missing(item),salary_floor=budget_floor(item)))
+    return render(request,'experience/requisition_detail.html',page_context(request,title=item.title,item=item,wizard_section=True,hide_action_rail=True,wizard_steps=steps(step_for(item),item),can_edit=editable(request.user,item),can_decide=can_decide,legacy_return=legacy_return,can_assign=can_assign,assignment_form=form,can_open_job=bool(item.job_id and scoped_jobs(request.user).filter(pk=item.job_id).exists()),can_register=can_register(request.user,item),can_correct=can_correct(request.user,item),read_only=not (editable(request.user,item) or can_decide or can_assign or can_register(request.user,item) or can_correct(request.user,item)),approval_valid=approved_valid(item),ta_unavailable=bool(item.ta_owner_id and not ta_eligible(item.ta_owner,item)),events=milestones,audit_events=events,revisions=revisions,differences=differences,package_issues=missing(item),salary_floor=budget_floor(item)))
 
 
 @workspace
 @require_http_methods(['POST'])
 def decision(request,pk):
-    from .requisition_wizard import missing,revision
-    with transaction.atomic():
-        item=get_object_or_404(permitted_requisitions(request.user).select_for_update(),pk=pk)
-        if item.approver_id!=request.user.pk or not request.user.has_perm('recruitment_experience.approve_hiringrequest'):raise PermissionDenied()
-        action=request.POST.get('decision');note=request.POST.get('note','').strip()[:2000]
-        legacy_return=item.status=='approved' and not item.approved_version and not item.job_id and action=='changes'
-        if (item.status!='pending' and not legacy_return) or str(item.version)!=request.POST.get('expected_version'):messages.error(request,'The request changed. Reload before recording a decision.')
-        elif action not in ['approved','changes','declined'] or request.POST.get('confirm')!='yes':messages.error(request,'Confirm the decision before continuing.')
-        elif action in ['changes','declined'] and not note:messages.error(request,'A reason is required so the requester understands this decision.')
-        elif action=='approved' and missing(item):messages.error(request,'This package is incomplete: '+missing(item)[0][1]+' Return it for changes or edit and complete it before approval.')
-        else:
-            item.status=action;item.decision_note=note;item.decided_at=timezone.now();item.version+=1;item.approved_version=item.version if action=='approved' else 0
-            if action=='changes':item.wizard_step=5;item.resume_section=5
-            item.save();revision(item,request.user,{'approved':'ceo_approved','changes':'ceo_returned','declined':'ceo_rejected'}[action],note)
-            record_event(requisition=item,kind='requisition_decision',detail='CEO '+{'approved':'approved the submitted package','changes':'returned the request for changes','declined':'rejected the hiring need'}[action]+(': '+note if note else ''),metadata={'decision':action,'version':item.version})
-            messages.success(request,'CEO decision recorded. '+('The HR Director now assigns one recruiter.' if action=='approved' else 'The requester can revise and resubmit.' if action=='changes' else 'This request is closed; its reason and history are retained.'))
-    return redirect('workspace-requisition-detail',pk=pk)
+    from .requisition_handoffs import decide_request
+    return decide_request(request,pk)
 
 
 class AssignmentForm(forms.Form):
     ta_owner=forms.ModelChoiceField(queryset=User.objects.none(),label='One TA owner')
     expected_version=forms.IntegerField(widget=forms.HiddenInput)
+    reason=forms.CharField(required=False,max_length=2000,label='Reason for reassignment',widget=forms.Textarea(attrs={'rows':3}),help_text='Required when changing an existing assignment. Previous ownership remains in history.')
     confirm=forms.BooleanField(label='I confirm this TA is responsible for registering and progressing this approved requisition')
     def __init__(self,*args,requisition,**kwargs):
         super().__init__(*args,**kwargs)
         # Eligible active HR coordinators with staff/employer records and access
         # to this division; assigning an account does not grant it new roles.
-        ids=[u.pk for u in User.objects.filter(is_active=True) if recruiter(u) and employee_for(u) and permitted_requisitions(u).filter(pk=requisition.pk).exists()]
-        self.fields['ta_owner'].queryset=User.objects.filter(pk__in=ids).order_by('username')
+        ids=[u.pk for u in User.objects.filter(is_active=True) if recruiter(u) and employee_for(u) and employee_for(u).is_active and permitted_requisitions(u).filter(pk=requisition.pk).exists()]
+        self.fields['ta_owner'].queryset=User.objects.filter(pk__in=ids).order_by('first_name','username')
+        self.fields['ta_owner'].label='Responsible recruiter / TA'
+        self.fields['ta_owner'].label_from_instance=lambda u:name(u)+' ('+u.username+')'
+        if not requisition.ta_owner_id:del self.fields['reason']
 
 
 @workspace
 @require_http_methods(['POST'])
 def assign(request,pk):
-    with transaction.atomic():
-        item=get_object_or_404(permitted_requisitions(request.user).select_for_update(),pk=pk)
-        if item.assignment_director_id!=request.user.pk or not request.user.has_perm('recruitment_experience.approve_offer'):raise PermissionDenied()
-        form=AssignmentForm(request.POST,requisition=item)
-        if not form.is_valid():messages.error(request,'Select an active TA with access to this division and confirm the assignment.')
-        elif item.status!='approved' or not item.approved_version or item.job_id or item.version!=form.cleaned_data['expected_version']:messages.error(request,'CEO approval is required and registered vacancies cannot be reassigned here. Reload the latest request.')
-        else:
-            item.ta_owner=form.cleaned_data['ta_owner'];item.assigned_by=request.user;item.assigned_at=timezone.now();item.version+=1;item.save()
-            record_event(requisition=item,kind='requisition_assignment',detail='Step 2 complete: HR Director assigned TA owner '+name(item.ta_owner),metadata={'ta_owner_id':item.ta_owner_id,'version':item.version})
-            messages.success(request,'TA assigned. Step 3 is now ready for that TA to register the vacancy.')
-    return redirect('workspace-requisition-detail',pk=pk)
+    from .requisition_handoffs import assign_request
+    return assign_request(request,pk)
 
 
 @workspace

@@ -94,6 +94,9 @@ def job_settings(request, pk):
             fields = ['division', 'location', 'work_type']
     form = ProfileForm(request.POST or None, instance=profile)
     form.fields['division'].queryset = allowed_divisions(request.user)
+    if Requisition.objects.filter(job=job).exists():
+        form.fields['division'].disabled=True
+        form.fields['division'].help_text='Division from the approved requisition. Existing unlinked vacancies can still be assigned by HR.'
     if request.method == 'POST' and form.is_valid():
         row = form.save(commit=False)
         row.job = job
@@ -308,8 +311,17 @@ def vacancy_form(request,pk=None):
             form.fields['title'].disabled=True
     else:
         form.fields['company_id'].queryset=Company.objects.filter(pk__in=scoped_jobs(request.user).values('company_id')) if not request.user.is_superuser else Company.objects.all()
+    linked_request=Requisition.objects.filter(job=job).first() if job else None
+    if linked_request:
+        from .requisition_registration import RegistrationForm
+        form.fields['open_positions'].queryset=RegistrationForm(instance=job,requisition=linked_request).fields['open_positions'].queryset
+        for key in ['title','vacancy','description']:
+            form.fields[key].disabled=True
+            form.fields[key].help_text='Approved hiring content. Additional headcount uses the additional-openings approval workflow; a different role or JD needs a new requisition.'
     if request.method=='POST' and form.is_valid():
-        if not job and not requisition:
+        if linked_request and form.cleaned_data['open_positions'].count()!=1:
+            form.add_error('open_positions','Choose exactly one eligible internal position for this approved role.')
+        elif not job and not requisition:
             form.add_error(None,'Start with an approved hiring requisition, then select Prepare approved vacancy. Existing vacancies can be edited directly.')
         else:
             return save_vacancy(request,form,job,requisition)

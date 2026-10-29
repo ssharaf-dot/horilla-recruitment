@@ -71,9 +71,12 @@ def missing(item):
     if not item.kpa_text.strip() or len(item.kpa_text.strip())<40:issues.append((3,'Define the expected outcomes, measures and timeframe.'))
     if PROMPTS.search(item.kpa_text):issues.append((3,'Replace the unfinished [prompts] in the success measures.'))
     if item.salary_min is None or item.salary_max is None or item.salary_min<=0 or item.salary_max<item.salary_min:issues.append((4,'Enter a positive salary range with maximum at least equal to minimum.'))
+    if item.salary_currency not in dict(Requisition._meta.get_field('salary_currency').choices):issues.append((4,'Choose a salary currency.'))
+    if item.salary_period not in ['month','year']:issues.append((4,'Choose a monthly or annual salary period.'))
     if not item.salary_basis:issues.append((4,'Specify whether salary means gross cash or base pay.'))
     if item.annual_budget is None or item.annual_budget<budget_floor(item):issues.append((4,'The annual total budget must cover the salary-only upper estimate for all openings.'))
     if not item.approver_id or not item.assignment_director_id:issues.append((5,'Select the CEO approver and HR Director.'))
+    if item.status in ['draft','changes','pending'] and item.assignment_director_id and (not item.assignment_director.is_active or not item.assignment_director.has_perm('recruitment_experience.approve_offer')):issues.append((5,'Select an active HR Director with assignment authority.'))
     if item.approver_id==item.requested_by_id:issues.append((5,'The requester cannot approve their own hiring need.'))
     return issues
 
@@ -93,15 +96,17 @@ class SectionForm(forms.ModelForm):
     kpa_timeframe=forms.CharField(required=False,max_length=500,label=KPA['kpa_timeframe'])
     class Meta:
         model=Requisition
-        fields=MODEL_FIELDS
-        labels={'title':'Role title / designation','grade':'Grade / seniority (if applicable)','department':'Department / team','work_location':'Work location','employment_type':'Employment type','hire_reason':'Type of hiring need','employer':'Legal employer','openings':'Number of openings','reason':'Why is this role needed?','jd_text':'Public JD — preview and edit','jd_document':'Supporting JD document (PDF)','jd_reviewed':'I reviewed the public JD for accuracy; it is ready to submit','kpa_document':'Supporting KPA document (PDF)','salary_min':'Proposed salary — minimum per person','salary_max':'Proposed salary — maximum per person','salary_currency':'Currency','salary_period':'Pay period','salary_basis':'Salary basis','annual_budget':'Total budget for the first 12 months — all openings','budget_notes':'What does this budget include?','target_start_date':'Desired joining date (if known)','approver':'CEO approver','assignment_director':'HR Director for recruiter assignment'}
-        widgets={key:forms.Textarea(attrs={'rows':3}) for key in ['reason','budget_notes']}|{'jd_text':forms.Textarea(attrs={'rows':12}),'target_start_date':forms.DateInput(attrs={'type':'date'})}
+        fields=MODEL_FIELDS+['kpa_text']
+        labels={'title':'Role title / designation','grade':'Grade / seniority (if applicable)','department':'Department / team','work_location':'Work location','employment_type':'Employment type','hire_reason':'Type of hiring need','employer':'Legal employer','openings':'Number of openings','reason':'Why is this role needed?','kpa_text':'Internal success measures / KPA','jd_text':'Public JD — preview and edit','jd_document':'Supporting JD document (PDF)','jd_reviewed':'I reviewed the public JD for accuracy; it is ready to submit','kpa_document':'Supporting KPA document (PDF)','salary_min':'Proposed salary — minimum per person','salary_max':'Proposed salary — maximum per person','salary_currency':'Currency','salary_period':'Pay period','salary_basis':'Salary basis','annual_budget':'Total budget for the first 12 months — all openings','budget_notes':'What does this budget include?','target_start_date':'Desired joining date (if known)','approver':'CEO approver','assignment_director':'HR Director for recruiter assignment'}
+        widgets={key:forms.Textarea(attrs={'rows':3}) for key in ['reason','budget_notes']}|{'jd_text':forms.Textarea(attrs={'rows':12}),'kpa_text':forms.Textarea(attrs={'rows':5}),'target_start_date':forms.DateInput(attrs={'type':'date'})}
     def __init__(self,*args,user,section=1,ceo=False,**kwargs):
         from .operations import allowed_divisions
         from .requisitions import RequestForm
         super().__init__(*args,**kwargs)
+        if ceo and self.is_bound and 'kpa_text' not in self.data:
+            self.data=self.data.copy();self.data['kpa_text']=self.instance.kpa_text
         self.section=section
-        allowed=(['title','openings','department','grade','work_location','employment_type','hire_reason','reason','jd_text','jd_reviewed']+BUDGET) if ceo else SECTIONS[section]
+        allowed=(['title','openings','department','grade','work_location','employment_type','hire_reason','reason','jd_text','jd_reviewed','kpa_text']+BUDGET) if ceo else SECTIONS[section]
         for key in list(self.fields):
             if key not in allowed+['expected_version','creation_token']:del self.fields[key]
         self.order_fields(allowed+['expected_version','creation_token'])
@@ -235,10 +240,11 @@ def ceo_edit(request,pk):
                 if action=='approved':
                     for _,problem in missing(value):form.add_error(None,problem)
                 if not form.errors:
+                    if value.kpa_text!=current.kpa_text:value.jd_outline={**(value.jd_outline or {}),'kpa':{}}
                     before=snapshot(current);value.version=current.version+1;value.status=action;value.decision_note=note;value.decided_at=timezone.now();value.approved_version=value.version if action=='approved' else 0
                     if action=='changes':value.wizard_step=5;value.resume_section=5
                     value.save();changed=[k for k,v in snapshot(value).items() if k not in ['status','approved_version','wizard_step'] and before.get(k)!=v]
                     revision(value,request.user,'ceo_edited_approved' if action=='approved' else 'ceo_edited_returned',note)
                     record_event(requisition=value,kind='requisition_decision',detail='CEO edited and '+('approved the revised package' if action=='approved' else 'returned the package for changes')+(' · '+note if note else ''),metadata={'version':value.version,'changed_fields':changed})
                     messages.success(request,'Revised version approved. The HR Director now assigns a recruiter.' if action=='approved' else 'Changes and reason saved. The requester can revise and resubmit.');return redirect('workspace-requisition-detail',pk=pk)
-    return render(request,'experience/requisition_ceo_edit.html',page_context(request,title='CEO · Edit hiring package',item=item,form=form,form_fields=fields_for(form),wizard_section=True,hide_action_rail=True,wizard_steps=steps(2,item),ceo_edit=True,note=request.POST.get('note','')[:2000]))
+    return render(request,'experience/requisition_ceo_edit.html',page_context(request,title='CEO · Edit hiring package',item=item,form=form,form_fields=fields_for(form),ceo_groups=[dict(label=label,rows=[r for r in fields_for(form) if r['bound'].name in keys]) for label,keys in [('Role and hiring need',BASE),('Public job description',['jd_text','jd_reviewed']),('Internal success measures',['kpa_text']),('Budget and terms',BUDGET)]],wizard_section=True,hide_action_rail=True,wizard_steps=steps(2,item),ceo_edit=True,note=request.POST.get('note','')[:2000]))
