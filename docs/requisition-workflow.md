@@ -39,13 +39,13 @@ Salary fields capture an internal proposal, not an industry benchmark or automat
 - Edit and return the package for clarification, or return it unchanged. A reason is required.
 - Reject the hiring need with a required reason. The request closes and its history remains available.
 
-The submitted version and subsequent decisions are stored as separate snapshots. CEO edits do not silently rewrite the earlier submission and do not require a requester acknowledgement before approval. The detail screen compares meaningful fields between recorded versions. Returned requests reopen for revision and resubmission; the requester cannot edit while the CEO owns a pending review. The operational division and legal employer remain unchanged in the CEO editor; return the request if those need correction, to preserve record scope.
+The submitted version and subsequent decisions are stored as separate snapshots. CEO edits do not silently rewrite the earlier submission and do not require a requester acknowledgement before approval. The detail screen compares meaningful fields between recorded versions. Returned requests reopen for revision and resubmission; the requester cannot edit while the CEO owns a pending review. The CEO can also edit internal success measures. The operational division and legal employer remain unchanged in the CEO editor; return the request if those need correction, to preserve record scope.
 
 **2B · HR Director assignment:** after a complete recorded CEO approval, the named Director selects one active eligible recruiter/TA. Assignment records the Director, TA and time and grants no new permissions. The CEO does not assign the TA through approval. This staffing approval is distinct from HR Director **offer approval** in Work Area 3.
 
 ### Step 3 — Register Vacancy (assigned TA)
 
-**3A · Vacancy details:** the approved role, employer, headcount and reviewed JD carry forward. TA selects an existing internal job-position mapping, recruitment dates and whether applications require a CV. Save & Next persists setup without creating a job. HR must configure a suitable internal job position separately if none exists.
+**3A · Vacancy details:** the approved role, employer, headcount and reviewed JD carry forward. TA selects one active, employer-eligible internal job-position mapping, recruitment dates and whether applications require a CV. Save & Next persists setup without creating a job. HR must configure a suitable internal job position separately if none exists.
 
 **3B · Review & create:** review the approved package and saved setup and confirm creation. The result is an **unpublished draft vacancy** with its assigned recruiter and initial recruitment stages. Registration stays in Work Area 1 until complete. The completion screen then links to Sourcing & Selection for explicit publication review. Repeated creation attempts cannot produce a second vacancy.
 
@@ -66,3 +66,6 @@ Keep the old application image and verified database/media backup for recovery. 
 ## Verification
 
 `deploy/requisition_workflow.py` is staging-only and rolls synthetic database rows back. It exercises partial drafts, saved sections, token retries, prompts, PDF extraction, salary validation, complete submission, role boundaries, stale edits, CEO edit-and-approve/return/reject, snapshots, Director assignment, two saved registration sections, vacancy inheritance and optional mocked AI. Uploaded fixtures are removed. Run the existing workflow, work-area, offer/joining controls, branding and recruitment-boundary suites before publishing. Desktop/mobile visual review remains necessary in addition to these server checks.
+
+
+The follow-up [approval and registration usability review](approval-registration-review.md) documents dedicated review/decision and assignment screens, correction handbacks, reassignment, setup revalidation and post-registration content controls. It supersedes the older details where they differ.
